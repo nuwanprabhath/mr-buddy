@@ -1,0 +1,136 @@
+{
+  "name": "mr-buddy",
+  "displayName": "MR Buddy",
+  "description": "GitLab merge request assistant — filter MRs you're a reviewer on, with approval-state filtering the web UI doesn't offer.",
+  "version": "0.1.0",
+  "publisher": "nuwan",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": ["SCM Providers", "Other"],
+  "activationEvents": [],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "mrBuddy",
+          "title": "MR Buddy",
+          "icon": "$(git-pull-request)"
+        }
+      ]
+    },
+    "views": {
+      "mrBuddy": [
+        {
+          "id": "mrBuddy.reviewing",
+          "name": "Reviewing",
+          "icon": "$(eye)"
+        },
+        {
+          "id": "mrBuddy.needsMyApproval",
+          "name": "Needs My Approval",
+          "icon": "$(check)"
+        },
+        {
+          "id": "mrBuddy.authored",
+          "name": "Authored by Me",
+          "icon": "$(person)"
+        },
+        {
+          "id": "mrBuddy.assigned",
+          "name": "Assigned to Me",
+          "icon": "$(account)"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "mrBuddy.refresh",
+        "title": "MR Buddy: Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "mrBuddy.signIn",
+        "title": "MR Buddy: Sign In to GitLab"
+      },
+      {
+        "command": "mrBuddy.signOut",
+        "title": "MR Buddy: Sign Out"
+      },
+      {
+        "command": "mrBuddy.openMr",
+        "title": "MR Buddy: Open MR in Browser"
+      },
+      {
+        "command": "mrBuddy.approveMr",
+        "title": "MR Buddy: Approve MR",
+        "icon": "$(check)"
+      },
+      {
+        "command": "mrBuddy.copyMrUrl",
+        "title": "MR Buddy: Copy MR URL"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "mrBuddy.refresh",
+          "when": "view == mrBuddy.reviewing || view == mrBuddy.needsMyApproval || view == mrBuddy.authored || view == mrBuddy.assigned",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "mrBuddy.approveMr",
+          "when": "viewItem == mr-unapproved",
+          "group": "inline"
+        },
+        {
+          "command": "mrBuddy.openMr",
+          "when": "viewItem =~ /^mr-/",
+          "group": "1_open"
+        },
+        {
+          "command": "mrBuddy.copyMrUrl",
+          "when": "viewItem =~ /^mr-/",
+          "group": "1_open"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "MR Buddy",
+      "properties": {
+        "mrBuddy.gitlabHost": {
+          "type": "string",
+          "default": "https://gitlab.com",
+          "description": "GitLab instance URL (e.g. https://gitlab.com or your self-hosted URL)."
+        },
+        "mrBuddy.refreshIntervalMinutes": {
+          "type": "number",
+          "default": 5,
+          "minimum": 0,
+          "description": "Auto-refresh interval in minutes. Set to 0 to disable."
+        },
+        "mrBuddy.showDrafts": {
+          "type": "boolean",
+          "default": true,
+          "description": "Include draft MRs in lists."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node",
+    "watch": "npm run build -- --watch",
+    "compile": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@types/vscode": "^1.85.0",
+    "esbuild": "^0.20.0",
+    "typescript": "^5.3.0"
+  }
+}
