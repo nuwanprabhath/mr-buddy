@@ -43,6 +43,18 @@ export interface ApprovalState {
   approvals_left?: number;
 }
 
+export interface Note {
+  id: number;
+  author: GitLabUser;
+  body: string;
+  system: boolean;
+}
+
+export interface Discussion {
+  id: string;
+  notes: Note[];
+}
+
 export class GitLabClient {
   constructor(private host: string, private token: string) {}
 
@@ -98,5 +110,11 @@ export class GitLabClient {
 
   async approve(projectId: number, iid: number): Promise<void> {
     await this.request(`/api/v4/projects/${projectId}/merge_requests/${iid}/approve`, 'POST');
+  }
+
+  async discussions(projectId: number, iid: number): Promise<Discussion[]> {
+    return this.request<Discussion[]>(
+      `/api/v4/projects/${projectId}/merge_requests/${iid}/discussions?per_page=100`
+    );
   }
 }

@@ -7,12 +7,17 @@ export class MrItem extends vscode.TreeItem {
   constructor(
     public readonly mr: MergeRequest,
     public readonly approvedByMe: boolean,
-    approvedByUsers: GitLabUser[] = []
+    approvedByUsers: GitLabUser[] = [],
+    highlight: boolean = false
   ) {
     const approvedIds = new Set(approvedByUsers.map((u) => u.id));
     const approvedCount = mr.reviewers.filter((r) => approvedIds.has(r.id)).length;
     const approvalBadge = mr.reviewers.length > 0 ? `[${approvedCount}/${mr.reviewers.length}] ` : '';
-    super(`${approvalBadge}${mr.title}`, vscode.TreeItemCollapsibleState.None);
+    const labelText = `${approvalBadge}${mr.title}`;
+    super(
+      highlight ? { label: labelText, highlights: [[0, labelText.length]] } : labelText,
+      vscode.TreeItemCollapsibleState.None
+    );
     const pipeline = mr.head_pipeline?.status ? ` • pipeline: ${mr.head_pipeline.status}` : '';
     const conflicts = mr.has_conflicts ? ' ⚠ conflicts' : '';
     const draft = mr.draft || mr.work_in_progress ? ' [DRAFT]' : '';

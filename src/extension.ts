@@ -134,20 +134,57 @@ async function refreshAll() {
 
     const reviewingFiltered = filter(reviewing);
 
-    // Compute approval state for reviewing MRs — needed for "Needs My Approval" bucket
-    // and to decorate icons.
-    const approvalResults = await Promise.all(
-      reviewingFiltered.map(async (mr) => {
-        try {
-          const state = await client!.approvalState(mr.project_id, mr.iid);
-          const approvedByUsers = state.approved_by.map((a) => a.user);
-          const approvedByMe = approvedByUsers.some((u) => u.id === currentUser!.id);
-          return { mr, approvedByMe, approvedByUsers };
-        } catch {
-          return { mr, approvedByMe: false, approvedByUsers: [] };
-        }
-      })
-    );
+    const authoredFiltered = filter(authored);
+
+    // Fetch approval state + discussions for reviewing and authored MRs in parallel
+    const [approvalResults, authoredItems] = await Promise.all([
+      Promise.all(
+        reviewingFiltered.map(async (mr) => {
+          try {
+            const [state, discs] = await Promise.all([
+              client!.approvalState(mr.project_id, mr.iid),
+              client!.discussions(mr.project_id, mr.iid)
+            ]);
+            const approvedByUsers = state.approved_by.map((a) => a.user);
+            const approvedByMe = approvedByUsers.some((u) => u.id === currentUser!.id);
+            // Bold in "needs my approval" when every thread I started has a reply
+            const myThreads = discs.filter((d) => {
+              const first = d.notes.find((n) => !n.system);
+              return first?.author.id === currentUser!.id;
+            });
+            const needsMyApprovalHighlight =
+              myThreads.length > 0 &&
+              myThreads.every((thread) =>
+                thread.notes.filter((n) => !n.system).slice(1).some((n) => n.author.id !== currentUser!.id)
+              );
+            return { mr, approvedByMe, approvedByUsers, needsMyApprovalHighlight };
+          } catch {
+            return { mr, approvedByMe: false, approvedByUsers: [], needsMyApprovalHighlight: false };
+          }
+        })
+      ),
+      Promise.all(
+        authoredFiltered.map(async (mr) => {
+          try {
+            const [state, discs] = await Promise.all([
+              client!.approvalState(mr.project_id, mr.iid),
+              client!.discussions(mr.project_id, mr.iid)
+            ]);
+            const approvedIds = new Set(state.approved_by.map((a) => a.user.id));
+            const commenterIds = new Set(
+              discs.flatMap((d) => d.notes.filter((n) => !n.system).map((n) => n.author.id))
+            );
+            // Bold in "authored" when every reviewer has approved or left a comment
+            const highlight =
+              mr.reviewers.length > 0 &&
+              mr.reviewers.every((r) => approvedIds.has(r.id) || commenterIds.has(r.id));
+            return new MrItem(mr, false, [], highlight);
+          } catch {
+            return new MrItem(mr, false);
+          }
+        })
+      )
+    ]);
 
     providers.reviewing.setItems(
       approvalResults.map(({ mr, approvedByMe, approvedByUsers }) => new MrItem(mr, approvedByMe, approvedByUsers))
@@ -155,9 +192,9 @@ async function refreshAll() {
     providers.needsMyApproval.setItems(
       approvalResults
         .filter(({ approvedByMe }) => !approvedByMe)
-        .map(({ mr, approvedByUsers }) => new MrItem(mr, false, approvedByUsers))
+        .map(({ mr, approvedByUsers, needsMyApprovalHighlight }) => new MrItem(mr, false, approvedByUsers, needsMyApprovalHighlight))
     );
-    providers.authored.setItems(filter(authored).map((mr) => new MrItem(mr, false)));
+    providers.authored.setItems(authoredItems);
     providers.assigned.setItems(filter(assigned).map((mr) => new MrItem(mr, false)));
   } catch (e: any) {
     for (const p of Object.values(providers)) p.setError(e.message);
