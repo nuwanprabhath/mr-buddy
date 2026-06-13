@@ -176,11 +176,29 @@ describe('MrItem icon and contextValue', () => {
     expect((item.iconPath as ThemeIcon).id).toBe('git-pull-request');
   });
 
-  it('sets contextValue to mr-approved when approvedByMe', () => {
-    expect(new MrItem(makeMr(), true).contextValue).toBe('mr-approved');
+  it('contextValue is mr-approved-unviewed when approved and not viewed', () => {
+    expect(new MrItem(makeMr(), true, [], false, false).contextValue).toBe('mr-approved-unviewed');
   });
 
-  it('sets contextValue to mr-unapproved when not approvedByMe', () => {
-    expect(new MrItem(makeMr(), false).contextValue).toBe('mr-unapproved');
+  it('contextValue is mr-unapproved-unviewed by default', () => {
+    expect(new MrItem(makeMr(), false).contextValue).toBe('mr-unapproved-unviewed');
+  });
+
+  it('contextValue is mr-approved-viewed when approved and viewed', () => {
+    expect(new MrItem(makeMr(), true, [], false, true).contextValue).toBe('mr-approved-viewed');
+  });
+
+  it('contextValue is mr-unapproved-viewed when not approved but viewed', () => {
+    expect(new MrItem(makeMr(), false, [], false, true).contextValue).toBe('mr-unapproved-viewed');
+  });
+});
+
+describe('MrItem viewed flag', () => {
+  it('viewed is false by default', () => {
+    expect(new MrItem(makeMr(), false).viewed).toBe(false);
+  });
+
+  it('viewed is true when passed true', () => {
+    expect(new MrItem(makeMr(), false, [], false, true).viewed).toBe(true);
   });
 });

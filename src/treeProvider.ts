@@ -23,7 +23,8 @@ export class MrItem extends vscode.TreeItem {
     public readonly mr: MergeRequest,
     public readonly approvedByMe: boolean,
     approvedByUsers: GitLabUser[] = [],
-    highlight: boolean = false
+    highlight: boolean = false,
+    public readonly viewed: boolean = false
   ) {
     const approvedIds = new Set(approvedByUsers.map((u) => u.id));
     const approvedCount = mr.reviewers.filter((r) => approvedIds.has(r.id)).length;
@@ -59,12 +60,22 @@ export class MrItem extends vscode.TreeItem {
     this.iconPath = new vscode.ThemeIcon(
       approvedByMe ? 'check' : mr.has_conflicts ? 'warning' : 'git-pull-request'
     );
-    this.contextValue = approvedByMe ? 'mr-approved' : 'mr-unapproved';
+    const approvedPart = approvedByMe ? 'approved' : 'unapproved';
+    const viewedPart = viewed ? 'viewed' : 'unviewed';
+    this.contextValue = `mr-${approvedPart}-${viewedPart}`;
     this.command = {
       command: 'mrBuddy.openMr',
       title: 'Open MR',
       arguments: [this]
     };
+  }
+}
+
+export class ViewedFolderItem extends vscode.TreeItem {
+  constructor(count: number) {
+    super(`Viewed (${count})`, vscode.TreeItemCollapsibleState.Collapsed);
+    this.iconPath = new vscode.ThemeIcon('eye');
+    this.contextValue = 'viewed-folder';
   }
 }
 
@@ -79,6 +90,7 @@ export class MrTreeProvider implements vscode.TreeDataProvider<vscode.TreeItem> 
   private _onDidChange = new vscode.EventEmitter<vscode.TreeItem | undefined>();
   readonly onDidChangeTreeData = this._onDidChange.event;
   private items: MrItem[] = [];
+  private viewedItems: MrItem[] = [];
   private loading = false;
   private error: string | undefined;
 
@@ -87,8 +99,9 @@ export class MrTreeProvider implements vscode.TreeDataProvider<vscode.TreeItem> 
     private readonly emptyMessage: string
   ) {}
 
-  setItems(items: MrItem[]) {
+  setItems(items: MrItem[], viewedItems: MrItem[] = []) {
     this.items = items;
+    this.viewedItems = viewedItems;
     this.error = undefined;
     this.loading = false;
     this._onDidChange.fire(undefined);
@@ -110,10 +123,19 @@ export class MrTreeProvider implements vscode.TreeDataProvider<vscode.TreeItem> 
     return el;
   }
 
-  getChildren(): vscode.TreeItem[] {
+  getChildren(element?: vscode.TreeItem): vscode.TreeItem[] {
+    if (element instanceof ViewedFolderItem) {
+      return this.viewedItems;
+    }
     if (this.loading) return [new EmptyItem('Loading…')];
     if (this.error) return [new EmptyItem(`Error: ${this.error}`)];
-    if (this.items.length === 0) return [new EmptyItem(this.emptyMessage)];
-    return this.items;
+    if (this.items.length === 0 && this.viewedItems.length === 0) {
+      return [new EmptyItem(this.emptyMessage)];
+    }
+    const root: vscode.TreeItem[] = [...this.items];
+    if (this.viewedItems.length > 0) {
+      root.push(new ViewedFolderItem(this.viewedItems.length));
+    }
+    return root;
   }
 }

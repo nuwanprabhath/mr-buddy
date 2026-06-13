@@ -1,4 +1,4 @@
-import { MrTreeProvider, MrItem } from '../treeProvider';
+import { MrTreeProvider, MrItem, ViewedFolderItem } from '../treeProvider';
 import { makeMr } from './helpers';
 
 function firstLabel(provider: MrTreeProvider): string {
@@ -58,5 +58,62 @@ describe('MrTreeProvider', () => {
   it('exposes the correct bucket id', () => {
     const p = new MrTreeProvider('authored', '');
     expect(p.bucket).toBe('authored');
+  });
+});
+
+describe('MrTreeProvider viewed sub-section', () => {
+  it('appends a ViewedFolderItem when viewed items are present', () => {
+    const p = new MrTreeProvider('reviewing', '');
+    const viewed = [new MrItem(makeMr({ iid: 10 }), false, [], false, true)];
+    p.setItems([], viewed);
+    const children = p.getChildren();
+    const folder = children.find((c) => c instanceof ViewedFolderItem);
+    expect(folder).toBeDefined();
+  });
+
+  it('ViewedFolderItem label reflects the count', () => {
+    const p = new MrTreeProvider('reviewing', '');
+    const viewed = [
+      new MrItem(makeMr({ iid: 1 }), false, [], false, true),
+      new MrItem(makeMr({ iid: 2 }), false, [], false, true)
+    ];
+    p.setItems([], viewed);
+    const folder = p.getChildren().find((c) => c instanceof ViewedFolderItem)!;
+    const label = typeof folder.label === 'string' ? folder.label : (folder.label as any).label;
+    expect(label).toContain('2');
+  });
+
+  it('getChildren(ViewedFolderItem) returns the viewed items', () => {
+    const p = new MrTreeProvider('reviewing', '');
+    const viewedItem = new MrItem(makeMr({ iid: 99 }), false, [], false, true);
+    p.setItems([], [viewedItem]);
+    const folder = p.getChildren().find((c) => c instanceof ViewedFolderItem) as ViewedFolderItem;
+    const viewedChildren = p.getChildren(folder);
+    expect(viewedChildren).toHaveLength(1);
+    expect(viewedChildren[0]).toBe(viewedItem);
+  });
+
+  it('does not show ViewedFolderItem when no viewed items', () => {
+    const p = new MrTreeProvider('reviewing', '');
+    p.setItems([new MrItem(makeMr(), false)]);
+    const children = p.getChildren();
+    expect(children.some((c) => c instanceof ViewedFolderItem)).toBe(false);
+  });
+
+  it('shows empty message only when both main and viewed lists are empty', () => {
+    const p = new MrTreeProvider('reviewing', 'Nothing here.');
+    p.setItems([], []);
+    expect(firstLabel(p)).toBe('Nothing here.');
+  });
+
+  it('main items and viewed folder coexist in root children', () => {
+    const p = new MrTreeProvider('reviewing', '');
+    const main = [new MrItem(makeMr({ iid: 1 }), false)];
+    const viewed = [new MrItem(makeMr({ iid: 2 }), false, [], false, true)];
+    p.setItems(main, viewed);
+    const children = p.getChildren();
+    expect(children).toHaveLength(2); // 1 main + 1 folder
+    expect(children[0]).toBe(main[0]);
+    expect(children[1]).toBeInstanceOf(ViewedFolderItem);
   });
 });

@@ -1,12 +1,30 @@
 import * as vscode from 'vscode';
 import { GitLabClient, MergeRequest, GitLabUser } from './gitlab';
-import { MrTreeProvider, MrItem, BucketId } from './treeProvider';
+import { MrTreeProvider, MrItem, ViewedFolderItem, BucketId } from './treeProvider';
 
 const SECRET_KEY = 'mrBuddy.gitlabToken';
+const VIEWED_STORE_KEY = 'mrBuddy.viewedStore';
 
 let client: GitLabClient | undefined;
 let currentUser: GitLabUser | undefined;
 let refreshTimer: NodeJS.Timeout | undefined;
+let extensionContext: vscode.ExtensionContext;
+
+// key: "projectId:iid", value: updated_at at time of marking viewed
+let viewedStore: Map<string, string> = new Map();
+
+function viewedKey(mr: MergeRequest): string {
+  return `${mr.project_id}:${mr.iid}`;
+}
+
+function loadViewedStore() {
+  const saved = extensionContext.globalState.get<Record<string, string>>(VIEWED_STORE_KEY) ?? {};
+  viewedStore = new Map(Object.entries(saved));
+}
+
+function saveViewedStore() {
+  extensionContext.globalState.update(VIEWED_STORE_KEY, Object.fromEntries(viewedStore));
+}
 
 const providers: Record<BucketId, MrTreeProvider> = {
   reviewing: new MrTreeProvider('reviewing', 'No MRs awaiting your review.'),
@@ -16,6 +34,9 @@ const providers: Record<BucketId, MrTreeProvider> = {
 };
 
 export async function activate(context: vscode.ExtensionContext) {
+  extensionContext = context;
+  loadViewedStore();
+
   vscode.window.registerTreeDataProvider('mrBuddy.reviewing', providers.reviewing);
   vscode.window.registerTreeDataProvider('mrBuddy.needsMyApproval', providers.needsMyApproval);
   vscode.window.registerTreeDataProvider('mrBuddy.authored', providers.authored);
@@ -35,6 +56,8 @@ export async function activate(context: vscode.ExtensionContext) {
       }
     }),
     vscode.commands.registerCommand('mrBuddy.approveMr', (item?: MrItem) => approveMr(item)),
+    vscode.commands.registerCommand('mrBuddy.markViewed', (item?: MrItem) => toggleViewed(item, true)),
+    vscode.commands.registerCommand('mrBuddy.unmarkViewed', (item?: MrItem) => toggleViewed(item, false)),
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (e.affectsConfiguration('mrBuddy')) {
         initClient(context).then(() => refreshAll());
@@ -111,6 +134,50 @@ function scheduleAutoRefresh() {
   }
 }
 
+function toggleViewed(item: MrItem | undefined, markAsViewed: boolean) {
+  if (!item?.mr) return;
+  const key = viewedKey(item.mr);
+  if (markAsViewed) {
+    viewedStore.set(key, item.mr.updated_at);
+  } else {
+    viewedStore.delete(key);
+  }
+  saveViewedStore();
+  refreshAll();
+}
+
+type MrData = {
+  mr: MergeRequest;
+  approvedByMe: boolean;
+  approvedByUsers: GitLabUser[];
+  highlight?: boolean;
+};
+
+function splitByViewed(
+  dataList: MrData[],
+  storeChanged: { changed: boolean }
+): { main: MrItem[]; viewed: MrItem[] } {
+  const main: MrItem[] = [];
+  const viewed: MrItem[] = [];
+  for (const { mr, approvedByMe, approvedByUsers, highlight } of dataList) {
+    const key = viewedKey(mr);
+    const storedAt = viewedStore.get(key);
+    if (storedAt !== undefined) {
+      if (mr.updated_at === storedAt) {
+        viewed.push(new MrItem(mr, approvedByMe, approvedByUsers, highlight ?? false, true));
+      } else {
+        // New activity since marked viewed — auto-move back to main
+        viewedStore.delete(key);
+        storeChanged.changed = true;
+        main.push(new MrItem(mr, approvedByMe, approvedByUsers, highlight ?? false, false));
+      }
+    } else {
+      main.push(new MrItem(mr, approvedByMe, approvedByUsers, highlight ?? false, false));
+    }
+  }
+  return { main, viewed };
+}
+
 async function refreshAll() {
   if (!client || !currentUser) {
     for (const p of Object.values(providers)) {
@@ -133,13 +200,11 @@ async function refreshAll() {
     ]);
 
     const reviewingFiltered = filter(reviewing);
-
     const authoredFiltered = filter(authored);
 
-    // Fetch approval state + discussions for reviewing and authored MRs in parallel
-    const [approvalResults, authoredItems] = await Promise.all([
+    const [reviewingData, authoredData, assignedData] = await Promise.all([
       Promise.all(
-        reviewingFiltered.map(async (mr) => {
+        reviewingFiltered.map(async (mr): Promise<MrData & { needsMyApprovalHighlight: boolean }> => {
           try {
             const [state, discs] = await Promise.all([
               client!.approvalState(mr.project_id, mr.iid),
@@ -147,7 +212,6 @@ async function refreshAll() {
             ]);
             const approvedByUsers = state.approved_by.map((a) => a.user);
             const approvedByMe = approvedByUsers.some((u) => u.id === currentUser!.id);
-            // Bold in "needs my approval" when every thread I started has a reply
             const myThreads = discs.filter((d) => {
               const first = d.notes.find((n) => !n.system);
               return first?.author.id === currentUser!.id;
@@ -164,51 +228,61 @@ async function refreshAll() {
         })
       ),
       Promise.all(
-        authoredFiltered.map(async (mr) => {
+        authoredFiltered.map(async (mr): Promise<MrData> => {
           try {
             const [state, discs] = await Promise.all([
               client!.approvalState(mr.project_id, mr.iid),
               client!.discussions(mr.project_id, mr.iid)
             ]);
-            const approvedIds = new Set(state.approved_by.map((a) => a.user.id));
+            const approvedByUsers = state.approved_by.map((a) => a.user);
+            const approvedIds = new Set(approvedByUsers.map((u) => u.id));
             const commenterIds = new Set(
               discs.flatMap((d) => d.notes.filter((n) => !n.system).map((n) => n.author.id))
             );
-            // Bold in "authored" when every reviewer has approved or left a comment
             const highlight =
               mr.reviewers.length > 0 &&
               mr.reviewers.every((r) => approvedIds.has(r.id) || commenterIds.has(r.id));
-            return new MrItem(mr, false, state.approved_by.map((a) => a.user), highlight);
+            return { mr, approvedByMe: false, approvedByUsers, highlight };
           } catch {
-            return new MrItem(mr, false);
+            return { mr, approvedByMe: false, approvedByUsers: [] };
+          }
+        })
+      ),
+      Promise.all(
+        filter(assigned).map(async (mr): Promise<MrData> => {
+          try {
+            const state = await client!.approvalState(mr.project_id, mr.iid);
+            const approvedByUsers = state.approved_by.map((a) => a.user);
+            const approvedByMe = approvedByUsers.some((u) => u.id === currentUser!.id);
+            return { mr, approvedByMe, approvedByUsers };
+          } catch {
+            return { mr, approvedByMe: false, approvedByUsers: [] };
           }
         })
       )
     ]);
 
-    providers.reviewing.setItems(
-      approvalResults.map(({ mr, approvedByMe, approvedByUsers }) => new MrItem(mr, approvedByMe, approvedByUsers))
-    );
-    providers.needsMyApproval.setItems(
-      approvalResults
-        .filter(({ approvedByMe }) => !approvedByMe)
-        .map(({ mr, approvedByUsers, needsMyApprovalHighlight }) => new MrItem(mr, false, approvedByUsers, needsMyApprovalHighlight))
-    );
-    const assignedItems = await Promise.all(
-      filter(assigned).map(async (mr) => {
-        try {
-          const state = await client!.approvalState(mr.project_id, mr.iid);
-          const approvedByUsers = state.approved_by.map((a) => a.user);
-          const approvedByMe = approvedByUsers.some((u) => u.id === currentUser!.id);
-          return new MrItem(mr, approvedByMe, approvedByUsers);
-        } catch {
-          return new MrItem(mr, false);
-        }
-      })
-    );
+    const storeChanged = { changed: false };
 
-    providers.authored.setItems(authoredItems);
-    providers.assigned.setItems(assignedItems);
+    const needsApprovalData = reviewingData
+      .filter(({ approvedByMe }) => !approvedByMe)
+      .map(({ mr, approvedByUsers, needsMyApprovalHighlight }) => ({
+        mr, approvedByMe: false, approvedByUsers, highlight: needsMyApprovalHighlight
+      }));
+    const needsApprovalIds = new Set(needsApprovalData.map(({ mr }) => `${mr.project_id}:${mr.iid}`));
+    const reviewingOnlyData = reviewingData.filter(({ mr }) => !needsApprovalIds.has(`${mr.project_id}:${mr.iid}`));
+
+    const reviewing_ = splitByViewed(reviewingOnlyData, storeChanged);
+    const needsApproval_ = splitByViewed(needsApprovalData, storeChanged);
+    const authored_ = splitByViewed(authoredData, storeChanged);
+    const assigned_ = splitByViewed(assignedData, storeChanged);
+
+    if (storeChanged.changed) saveViewedStore();
+
+    providers.reviewing.setItems(reviewing_.main, reviewing_.viewed);
+    providers.needsMyApproval.setItems(needsApproval_.main, needsApproval_.viewed);
+    providers.authored.setItems(authored_.main, authored_.viewed);
+    providers.assigned.setItems(assigned_.main, assigned_.viewed);
   } catch (e: any) {
     for (const p of Object.values(providers)) p.setError(e.message);
   }

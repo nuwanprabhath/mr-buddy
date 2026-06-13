@@ -74,6 +74,16 @@
       {
         "command": "mrBuddy.copyMrUrl",
         "title": "MR Buddy: Copy MR URL"
+      },
+      {
+        "command": "mrBuddy.markViewed",
+        "title": "MR Buddy: Mark as Viewed",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "mrBuddy.unmarkViewed",
+        "title": "MR Buddy: Unmark as Viewed",
+        "icon": "$(eye-closed)"
       }
     ],
     "menus": {
@@ -87,7 +97,17 @@
       "view/item/context": [
         {
           "command": "mrBuddy.approveMr",
-          "when": "viewItem == mr-unapproved",
+          "when": "viewItem =~ /^mr-unapproved/",
+          "group": "inline"
+        },
+        {
+          "command": "mrBuddy.markViewed",
+          "when": "viewItem =~ /^mr-.*-unviewed$/",
+          "group": "inline"
+        },
+        {
+          "command": "mrBuddy.unmarkViewed",
+          "when": "viewItem =~ /^mr-.*-viewed$/",
           "group": "inline"
         },
         {
