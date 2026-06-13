@@ -3,6 +3,21 @@ import { GitLabUser, MergeRequest } from './gitlab';
 
 export type BucketId = 'reviewing' | 'needsMyApproval' | 'authored' | 'assigned';
 
+export function relativeTime(dateStr: string): string {
+  const diff = Date.now() - new Date(dateStr).getTime();
+  const minutes = Math.floor(diff / (1000 * 60));
+  const hours = Math.floor(diff / (1000 * 60 * 60));
+  const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+  if (minutes < 60) return minutes <= 1 ? 'just now' : `${minutes} minutes ago`;
+  if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+  if (days === 1) return 'yesterday';
+  if (days < 30) return `${days} days ago`;
+  const months = Math.floor(days / 30);
+  if (months < 12) return `${months} month${months === 1 ? '' : 's'} ago`;
+  const years = Math.floor(months / 12);
+  return `${years} year${years === 1 ? '' : 's'} ago`;
+}
+
 export class MrItem extends vscode.TreeItem {
   constructor(
     public readonly mr: MergeRequest,
@@ -13,7 +28,8 @@ export class MrItem extends vscode.TreeItem {
     const approvedIds = new Set(approvedByUsers.map((u) => u.id));
     const approvedCount = mr.reviewers.filter((r) => approvedIds.has(r.id)).length;
     const approvalBadge = mr.reviewers.length > 0 ? `[${approvedCount}/${mr.reviewers.length}] ` : '';
-    const labelText = `${approvalBadge}${mr.title}`;
+    const project = mr.references.full.replace(/![0-9]+$/, '');
+    const labelText = `!${mr.iid} • @${mr.author.username} • ${approvalBadge}${mr.title}`;
     super(
       highlight ? { label: labelText, highlights: [[0, labelText.length]] } : labelText,
       vscode.TreeItemCollapsibleState.None
@@ -22,7 +38,7 @@ export class MrItem extends vscode.TreeItem {
     const conflicts = mr.has_conflicts ? ' ⚠ conflicts' : '';
     const draft = mr.draft || mr.work_in_progress ? ' [DRAFT]' : '';
 
-    this.description = `${mr.references.full} • ${mr.author.username}`;
+    this.description = `${project} • ${relativeTime(mr.created_at)}`;
 
     const pendingIcon = mr.user_notes_count > 0 ? '💬' : '⏳';
     const reviewerLines = mr.reviewers.length
@@ -31,7 +47,7 @@ export class MrItem extends vscode.TreeItem {
 
     const tooltip = new vscode.MarkdownString(
       `**${mr.title}**${draft}\n\n` +
-      `${mr.references.full} by @${mr.author.username}\n\n` +
+      `${mr.references.full} by @${mr.author.username} • opened ${relativeTime(mr.created_at)}\n\n` +
       `\`${mr.source_branch}\` → \`${mr.target_branch}\`${pipeline}${conflicts}\n\n` +
       `💬 ${mr.user_notes_count}  👍 ${mr.upvotes}  👎 ${mr.downvotes}\n\n` +
       `**Reviewers**\n\n${reviewerLines}\n\n` +

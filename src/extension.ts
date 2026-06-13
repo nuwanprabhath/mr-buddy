@@ -178,7 +178,7 @@ async function refreshAll() {
             const highlight =
               mr.reviewers.length > 0 &&
               mr.reviewers.every((r) => approvedIds.has(r.id) || commenterIds.has(r.id));
-            return new MrItem(mr, false, [], highlight);
+            return new MrItem(mr, false, state.approved_by.map((a) => a.user), highlight);
           } catch {
             return new MrItem(mr, false);
           }
@@ -194,8 +194,21 @@ async function refreshAll() {
         .filter(({ approvedByMe }) => !approvedByMe)
         .map(({ mr, approvedByUsers, needsMyApprovalHighlight }) => new MrItem(mr, false, approvedByUsers, needsMyApprovalHighlight))
     );
+    const assignedItems = await Promise.all(
+      filter(assigned).map(async (mr) => {
+        try {
+          const state = await client!.approvalState(mr.project_id, mr.iid);
+          const approvedByUsers = state.approved_by.map((a) => a.user);
+          const approvedByMe = approvedByUsers.some((u) => u.id === currentUser!.id);
+          return new MrItem(mr, approvedByMe, approvedByUsers);
+        } catch {
+          return new MrItem(mr, false);
+        }
+      })
+    );
+
     providers.authored.setItems(authoredItems);
-    providers.assigned.setItems(filter(assigned).map((mr) => new MrItem(mr, false)));
+    providers.assigned.setItems(assignedItems);
   } catch (e: any) {
     for (const p of Object.values(providers)) p.setError(e.message);
   }
