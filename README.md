@@ -15,24 +15,21 @@ VS Code extension that fills the gap in GitLab's web UI: filter merge requests y
 
 ## Install
 
-### Prerequisites
+Search for **MR Buddy** in the VS Code Extensions view, or install from the [Marketplace listing](https://marketplace.visualstudio.com/items?itemName=nuwan.mr-buddy).
 
-- [Node.js](https://nodejs.org) 18+
-- [VS Code](https://code.visualstudio.com)
+The MR Buddy icon will appear in the activity bar after install.
 
-### Build and install
+### Build from source
 
 ```bash
-git clone <repo-url>
+git clone https://github.com/nuwanprabhath/mr-buddy.git
 cd mr-buddy
 npm install
 npx @vscode/vsce package
-code --install-extension mr-buddy-0.1.0.vsix
+code --install-extension mr-buddy-0.2.0.vsix
 ```
 
-Restart VS Code after install. The MR Buddy icon will appear in the activity bar.
-
-Alternatively, install via the UI: `Cmd+Shift+P` → **Extensions: Install from VSIX…** → select `mr-buddy-0.1.0.vsix`.
+Alternatively, install via the UI: `Cmd+Shift+P` → **Extensions: Install from VSIX…** → select the generated `.vsix`.
 
 ### Sign in
 
@@ -46,10 +43,10 @@ Alternatively, install via the UI: `Cmd+Shift+P` → **Extensions: Install from 
 ```bash
 npm install
 npx @vscode/vsce package
-code --install-extension mr-buddy-0.1.0.vsix
+code --install-extension mr-buddy-0.2.0.vsix
 ```
 
-Then restart VS Code (or reload the window: `Cmd+Shift+P` → **Developer: Reload Window**).
+Then reload the window: `Cmd+Shift+P` → **Developer: Reload Window**.
 
 ## How "Needs My Approval" works
 
