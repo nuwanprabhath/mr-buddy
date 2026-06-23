@@ -61,6 +61,55 @@ describe('MrTreeProvider', () => {
   });
 });
 
+describe('MrTreeProvider stable ids for diffing', () => {
+  it('ViewedFolderItem has a stable id', () => {
+    const p = new MrTreeProvider('reviewing', '');
+    p.setItems([], [new MrItem(makeMr(), false, [], false, true)]);
+    const folder = p.getChildren().find((c) => c instanceof ViewedFolderItem)!;
+    expect(folder.id).toBe('viewed-folder');
+  });
+});
+
+describe('MrTreeProvider background refresh keeps stale content', () => {
+  it('keeps showing existing items when setLoading is called again (refresh in flight)', () => {
+    const p = new MrTreeProvider('reviewing', 'Nothing here.');
+    const items = [new MrItem(makeMr({ iid: 1 }), false)];
+    p.setItems(items);
+    p.setLoading();
+    const children = p.getChildren();
+    expect(children).toHaveLength(1);
+    expect(children[0]).toBe(items[0]);
+  });
+
+  it('keeps showing existing items when a background refresh errors', () => {
+    const p = new MrTreeProvider('reviewing', 'Nothing here.');
+    const items = [new MrItem(makeMr({ iid: 1 }), false)];
+    p.setItems(items);
+    p.setError('network blip');
+    const children = p.getChildren();
+    expect(children).toHaveLength(1);
+    expect(children[0]).toBe(items[0]);
+  });
+
+  it('still shows the Loading placeholder on the very first load (no content yet)', () => {
+    const p = new MrTreeProvider('reviewing', 'Nothing here.');
+    p.setLoading();
+    expect(firstLabel(p)).toBe('Loading…');
+  });
+
+  it('replaces stale items once setItems delivers fresh data', () => {
+    const p = new MrTreeProvider('reviewing', 'Nothing here.');
+    const stale = [new MrItem(makeMr({ iid: 1 }), false)];
+    p.setItems(stale);
+    p.setLoading();
+    const fresh = [new MrItem(makeMr({ iid: 2 }), false)];
+    p.setItems(fresh);
+    const children = p.getChildren();
+    expect(children).toHaveLength(1);
+    expect(children[0]).toBe(fresh[0]);
+  });
+});
+
 describe('MrTreeProvider viewed sub-section', () => {
   it('appends a ViewedFolderItem when viewed items are present', () => {
     const p = new MrTreeProvider('reviewing', '');

@@ -80,10 +80,14 @@ describe('MrItem description', () => {
     expect(item.description).not.toContain('!42');
   });
 
-  it('contains a relative date', () => {
-    const mr = makeMr({ created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString() });
+  it('contains the relative updated date, not the created date', () => {
+    const mr = makeMr({
+      created_at: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
+      updated_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString()
+    });
     const item = new MrItem(mr, false);
-    expect(item.description).toContain('5 days ago');
+    expect(item.description).toContain('updated 5 days ago');
+    expect(item.description).not.toContain('30 days ago');
   });
 });
 
@@ -109,6 +113,17 @@ describe('MrItem tooltip', () => {
     const mr = makeMr({ created_at: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString() });
     const item = new MrItem(mr, false);
     expect((item.tooltip as MarkdownString).value).toContain('opened 3 days ago');
+  });
+
+  it('contains "updated" with a relative date, independent of opened date', () => {
+    const mr = makeMr({
+      created_at: new Date(Date.now() - 20 * 24 * 60 * 60 * 1000).toISOString(),
+      updated_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
+    });
+    const item = new MrItem(mr, false);
+    const tooltipVal = (item.tooltip as MarkdownString).value;
+    expect(tooltipVal).toContain('opened 20 days ago');
+    expect(tooltipVal).toContain('updated 2 hours ago');
   });
 
   it('contains source and target branches', () => {
@@ -190,6 +205,20 @@ describe('MrItem icon and contextValue', () => {
 
   it('contextValue is mr-unapproved-viewed when not approved but viewed', () => {
     expect(new MrItem(makeMr(), false, [], false, true).contextValue).toBe('mr-unapproved-viewed');
+  });
+});
+
+describe('MrItem stable id', () => {
+  it('id is derived from project_id and iid', () => {
+    const item = new MrItem(makeMr({ project_id: 7, iid: 42 }), false);
+    expect(item.id).toBe('7:42');
+  });
+
+  it('id stays the same across approval/viewed state changes (so VS Code can diff in place)', () => {
+    const mr = makeMr({ project_id: 7, iid: 42 });
+    const unviewed = new MrItem(mr, false);
+    const viewed = new MrItem(mr, true, [], false, true);
+    expect(unviewed.id).toBe(viewed.id);
   });
 });
 

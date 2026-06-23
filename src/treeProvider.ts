@@ -35,11 +35,14 @@ export class MrItem extends vscode.TreeItem {
       highlight ? { label: labelText, highlights: [[0, labelText.length]] } : labelText,
       vscode.TreeItemCollapsibleState.None
     );
+    // Stable id lets VS Code diff tree updates in place instead of tearing down
+    // and recreating rows on every refresh (which causes a visible flicker).
+    this.id = `${mr.project_id}:${mr.iid}`;
     const pipeline = mr.head_pipeline?.status ? ` • pipeline: ${mr.head_pipeline.status}` : '';
     const conflicts = mr.has_conflicts ? ' ⚠ conflicts' : '';
     const draft = mr.draft || mr.work_in_progress ? ' [DRAFT]' : '';
 
-    this.description = `${project} • ${relativeTime(mr.created_at)}`;
+    this.description = `${project} • updated ${relativeTime(mr.updated_at)}`;
 
     const pendingIcon = mr.user_notes_count > 0 ? '💬' : '⏳';
     const reviewerLines = mr.reviewers.length
@@ -48,7 +51,7 @@ export class MrItem extends vscode.TreeItem {
 
     const tooltip = new vscode.MarkdownString(
       `**${mr.title}**${draft}\n\n` +
-      `${mr.references.full} by @${mr.author.username} • opened ${relativeTime(mr.created_at)}\n\n` +
+      `${mr.references.full} by @${mr.author.username} • opened ${relativeTime(mr.created_at)} • updated ${relativeTime(mr.updated_at)}\n\n` +
       `\`${mr.source_branch}\` → \`${mr.target_branch}\`${pipeline}${conflicts}\n\n` +
       `💬 ${mr.user_notes_count}  👍 ${mr.upvotes}  👎 ${mr.downvotes}\n\n` +
       `**Reviewers**\n\n${reviewerLines}\n\n` +
@@ -74,6 +77,7 @@ export class MrItem extends vscode.TreeItem {
 export class ViewedFolderItem extends vscode.TreeItem {
   constructor(count: number) {
     super(`Viewed (${count})`, vscode.TreeItemCollapsibleState.Collapsed);
+    this.id = 'viewed-folder';
     this.iconPath = new vscode.ThemeIcon('eye');
     this.contextValue = 'viewed-folder';
   }
@@ -127,11 +131,12 @@ export class MrTreeProvider implements vscode.TreeDataProvider<vscode.TreeItem> 
     if (element instanceof ViewedFolderItem) {
       return this.viewedItems;
     }
-    if (this.loading) return [new EmptyItem('Loading…')];
-    if (this.error) return [new EmptyItem(`Error: ${this.error}`)];
-    if (this.items.length === 0 && this.viewedItems.length === 0) {
-      return [new EmptyItem(this.emptyMessage)];
-    }
+    const hasContent = this.items.length > 0 || this.viewedItems.length > 0;
+    // Keep showing existing content while a background refresh is in flight —
+    // only fall back to the Loading placeholder on the very first load.
+    if (this.loading && !hasContent) return [new EmptyItem('Loading…')];
+    if (this.error && !hasContent) return [new EmptyItem(`Error: ${this.error}`)];
+    if (!hasContent) return [new EmptyItem(this.emptyMessage)];
     const root: vscode.TreeItem[] = [...this.items];
     if (this.viewedItems.length > 0) {
       root.push(new ViewedFolderItem(this.viewedItems.length));

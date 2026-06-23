@@ -175,6 +175,11 @@ function splitByViewed(
       main.push(new MrItem(mr, approvedByMe, approvedByUsers, highlight ?? false, false));
     }
   }
+  const byUpdatedDesc = (a: MrItem, b: MrItem) =>
+    new Date(b.mr.updated_at).getTime() - new Date(a.mr.updated_at).getTime();
+  main.sort(byUpdatedDesc);
+  viewed.sort(byUpdatedDesc);
+
   return { main, viewed };
 }
 
@@ -185,7 +190,20 @@ async function refreshAll() {
     }
     return;
   }
+  const activeClient = client;
+  const activeUser = currentUser;
 
+  // Spinner on every view's title bar for the whole duration, instead of an
+  // easy-to-miss status bar message — and it stays until doRefresh actually finishes.
+  const refreshPromise = doRefresh(activeClient, activeUser);
+  await Promise.all(
+    (Object.keys(providers) as BucketId[]).map((bucket) =>
+      vscode.window.withProgress({ location: { viewId: `mrBuddy.${bucket}` } }, () => refreshPromise)
+    )
+  );
+}
+
+async function doRefresh(client: GitLabClient, currentUser: GitLabUser) {
   for (const p of Object.values(providers)) p.setLoading();
 
   const showDrafts = vscode.workspace.getConfiguration('mrBuddy').get<boolean>('showDrafts') ?? true;
@@ -285,6 +303,7 @@ async function refreshAll() {
     providers.assigned.setItems(assigned_.main, assigned_.viewed);
   } catch (e: any) {
     for (const p of Object.values(providers)) p.setError(e.message);
+    vscode.window.showErrorMessage(`MR Buddy: refresh failed — ${e.message}`);
   }
 }
 

@@ -26,7 +26,7 @@ git clone https://github.com/nuwanprabhath/mr-buddy.git
 cd mr-buddy
 npm install
 npx @vscode/vsce package
-code --install-extension mr-buddy-0.2.0.vsix
+code --install-extension mr-buddy-0.5.0.vsix
 ```
 
 Alternatively, install via the UI: `Cmd+Shift+P` → **Extensions: Install from VSIX…** → select the generated `.vsix`.
@@ -43,7 +43,7 @@ Alternatively, install via the UI: `Cmd+Shift+P` → **Extensions: Install from 
 ```bash
 npm install
 npx @vscode/vsce package
-code --install-extension mr-buddy-0.2.0.vsix
+code --install-extension mr-buddy-0.5.0.vsix
 ```
 
 Then reload the window: `Cmd+Shift+P` → **Developer: Reload Window**.
