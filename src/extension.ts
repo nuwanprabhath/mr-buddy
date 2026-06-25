@@ -56,6 +56,11 @@ export async function activate(context: vscode.ExtensionContext) {
       }
     }),
     vscode.commands.registerCommand('mrBuddy.approveMr', (item?: MrItem) => approveMr(item)),
+    vscode.commands.registerCommand('mrBuddy.copyText', (text?: string) => {
+      if (!text) return;
+      vscode.env.clipboard.writeText(text);
+      vscode.window.showInformationMessage('Copied to clipboard.');
+    }),
     vscode.commands.registerCommand('mrBuddy.markViewed', (item?: MrItem) => toggleViewed(item, true)),
     vscode.commands.registerCommand('mrBuddy.unmarkViewed', (item?: MrItem) => toggleViewed(item, false)),
     vscode.workspace.onDidChangeConfiguration((e) => {

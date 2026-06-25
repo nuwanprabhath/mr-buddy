@@ -22,6 +22,7 @@ export class ThemeIcon {
 
 export class MarkdownString {
   isTrusted?: boolean;
+  supportThemeIcons?: boolean;
   constructor(public value: string = '') {}
 }
 

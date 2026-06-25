@@ -18,6 +18,20 @@ export function relativeTime(dateStr: string): string {
   return `${years} year${years === 1 ? '' : 's'} ago`;
 }
 
+export function extractTicketNumber(title: string): string | null {
+  const match = title.match(/#(\d+)/);
+  return match ? match[1] : null;
+}
+
+export function buildIssueUrl(webUrl: string, ticketNumber: string): string {
+  return webUrl.replace(/\/-\/merge_requests\/\d+\/?$/, `/-/issues/${ticketNumber}`);
+}
+
+function copyCommandLink(label: string, text: string): string {
+  const args = encodeURIComponent(JSON.stringify([text]));
+  return `[$(copy) ${label}](command:mrBuddy.copyText?${args})`;
+}
+
 export class MrItem extends vscode.TreeItem {
   constructor(
     public readonly mr: MergeRequest,
@@ -49,15 +63,24 @@ export class MrItem extends vscode.TreeItem {
       ? mr.reviewers.map((r) => `${approvedIds.has(r.id) ? '✅' : pendingIcon} @${r.username}`).join('\n\n')
       : '_No reviewers assigned_';
 
+    const ticketNumber = extractTicketNumber(mr.title);
+    const issueUrl = ticketNumber ? buildIssueUrl(mr.web_url, ticketNumber) : null;
+    const titleWithTicketLink =
+      ticketNumber && issueUrl ? mr.title.replace(`#${ticketNumber}`, `[#${ticketNumber}](${issueUrl})`) : mr.title;
+    const ticketLine = issueUrl ? `${copyCommandLink('Copy ticket link', issueUrl)}\n\n` : '';
+
     const tooltip = new vscode.MarkdownString(
-      `**${mr.title}**${draft}\n\n` +
+      `**${titleWithTicketLink}**${draft}\n\n` +
       `${mr.references.full} by @${mr.author.username} • opened ${relativeTime(mr.created_at)} • updated ${relativeTime(mr.updated_at)}\n\n` +
+      ticketLine +
       `\`${mr.source_branch}\` → \`${mr.target_branch}\`${pipeline}${conflicts}\n\n` +
+      `${copyCommandLink('Copy branch name', mr.source_branch)}\n\n` +
       `💬 ${mr.user_notes_count}  👍 ${mr.upvotes}  👎 ${mr.downvotes}\n\n` +
       `**Reviewers**\n\n${reviewerLines}\n\n` +
       `[Open in browser](${mr.web_url})`
     );
     tooltip.isTrusted = true;
+    tooltip.supportThemeIcons = true;
     this.tooltip = tooltip;
 
     this.iconPath = new vscode.ThemeIcon(

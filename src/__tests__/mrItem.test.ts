@@ -1,4 +1,4 @@
-import { MrItem } from '../treeProvider';
+import { MrItem, extractTicketNumber, buildIssueUrl } from '../treeProvider';
 import { MarkdownString, ThemeIcon } from '../__mocks__/vscode';
 import { makeMr, makeUser } from './helpers';
 
@@ -7,6 +7,27 @@ function labelText(item: MrItem): string {
   if (typeof l === 'string') return l;
   return (l as any).label;
 }
+
+describe('extractTicketNumber', () => {
+  it('extracts a ticket number from the title', () => {
+    expect(extractTicketNumber('feat: #2317 species list field migration')).toBe('2317');
+  });
+
+  it('returns null when no ticket number is present', () => {
+    expect(extractTicketNumber('feat: species list field migration')).toBeNull();
+  });
+
+  it('extracts the first ticket number when multiple are present', () => {
+    expect(extractTicketNumber('fix: #100 relates to #200')).toBe('100');
+  });
+});
+
+describe('buildIssueUrl', () => {
+  it('replaces the merge_requests path segment with the issues path', () => {
+    const url = buildIssueUrl('https://gitlab.example.com/org/repo/-/merge_requests/42', '2317');
+    expect(url).toBe('https://gitlab.example.com/org/repo/-/issues/2317');
+  });
+});
 
 describe('MrItem label', () => {
   it('starts with the MR iid', () => {
@@ -153,6 +174,44 @@ describe('MrItem tooltip', () => {
   it('shows [DRAFT] when draft', () => {
     const item = new MrItem(makeMr({ draft: true }), false);
     expect((item.tooltip as MarkdownString).value).toContain('[DRAFT]');
+  });
+
+  it('makes the ticket number a clickable link to the issue', () => {
+    const mr = makeMr({
+      title: 'feat: #2317 species list field migration',
+      web_url: 'https://gitlab.example.com/org/repo/-/merge_requests/42'
+    });
+    const item = new MrItem(mr, false);
+    const tooltipVal = (item.tooltip as MarkdownString).value;
+    expect(tooltipVal).toContain('[#2317](https://gitlab.example.com/org/repo/-/issues/2317)');
+  });
+
+  it('adds a "Copy ticket link" action when a ticket number is present', () => {
+    const mr = makeMr({ title: 'feat: #2317 species list field migration' });
+    const item = new MrItem(mr, false);
+    const tooltipVal = (item.tooltip as MarkdownString).value;
+    expect(tooltipVal).toContain('Copy ticket link');
+    expect(tooltipVal).toContain('command:mrBuddy.copyText');
+  });
+
+  it('omits ticket link and copy action when title has no ticket number', () => {
+    const mr = makeMr({ title: 'feat: species list field migration' });
+    const item = new MrItem(mr, false);
+    const tooltipVal = (item.tooltip as MarkdownString).value;
+    expect(tooltipVal).not.toContain('Copy ticket link');
+  });
+
+  it('adds a "Copy branch name" action with the source branch encoded', () => {
+    const mr = makeMr({ source_branch: 'feature/my-branch' });
+    const item = new MrItem(mr, false);
+    const tooltipVal = (item.tooltip as MarkdownString).value;
+    expect(tooltipVal).toContain('Copy branch name');
+    expect(tooltipVal).toContain(encodeURIComponent(JSON.stringify(['feature/my-branch'])));
+  });
+
+  it('enables theme icons on the tooltip for the copy icons', () => {
+    const item = new MrItem(makeMr(), false);
+    expect((item.tooltip as MarkdownString).supportThemeIcons).toBe(true);
   });
 
   it('shows reviewer list with approval status', () => {
