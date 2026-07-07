@@ -13,12 +13,32 @@ describe('extractTicketNumber', () => {
     expect(extractTicketNumber('feat: #2317 species list field migration')).toBe('2317');
   });
 
-  it('returns null when no ticket number is present', () => {
+  it('returns null when no ticket number is present in title or description', () => {
     expect(extractTicketNumber('feat: species list field migration')).toBeNull();
   });
 
-  it('extracts the first ticket number when multiple are present', () => {
+  it('extracts the first ticket number when multiple are present in title', () => {
     expect(extractTicketNumber('fix: #100 relates to #200')).toBe('100');
+  });
+
+  it('falls back to description "Closes #N" when title has no ticket number', () => {
+    expect(extractTicketNumber('Site/transect project-based filtering', 'Closes #2176')).toBe('2176');
+  });
+
+  it('finds ticket from "Fixes #N" in description', () => {
+    expect(extractTicketNumber('My feature', 'Fixes #999')).toBe('999');
+  });
+
+  it('finds ticket from "Resolves #N" in description', () => {
+    expect(extractTicketNumber('My feature', 'Resolves #42')).toBe('42');
+  });
+
+  it('prefers title match over description', () => {
+    expect(extractTicketNumber('fix: #100 my thing', 'Closes #200')).toBe('100');
+  });
+
+  it('returns null when neither title nor description has a ticket number', () => {
+    expect(extractTicketNumber('no ticket here', 'just some description')).toBeNull();
   });
 });
 
@@ -195,10 +215,22 @@ describe('MrItem tooltip', () => {
   });
 
   it('omits ticket link and copy action when title has no ticket number', () => {
-    const mr = makeMr({ title: 'feat: species list field migration' });
+    const mr = makeMr({ title: 'feat: species list field migration', description: '' });
     const item = new MrItem(mr, false);
     const tooltipVal = (item.tooltip as MarkdownString).value;
     expect(tooltipVal).not.toContain('Copy ticket link');
+  });
+
+  it('shows ticket link from description "Closes #N" when title has no ticket number', () => {
+    const mr = makeMr({
+      title: 'Site/transect project-based filtering',
+      description: 'Closes #2176',
+      web_url: 'https://gitlab.example.com/org/repo/-/merge_requests/1007'
+    });
+    const item = new MrItem(mr, false);
+    const tooltipVal = (item.tooltip as MarkdownString).value;
+    expect(tooltipVal).toContain('[#2176](https://gitlab.example.com/org/repo/-/issues/2176)');
+    expect(tooltipVal).toContain('Copy ticket link');
   });
 
   it('adds a "Copy branch name" action with the source branch encoded', () => {
@@ -231,6 +263,31 @@ describe('MrItem tooltip', () => {
   it('has isTrusted set to true', () => {
     const item = new MrItem(makeMr(), false);
     expect((item.tooltip as MarkdownString).isTrusted).toBe(true);
+  });
+
+  it('adds a "Copy MR link" action with the MR web_url encoded', () => {
+    const mr = makeMr({ web_url: 'https://gitlab.example.com/org/repo/-/merge_requests/42' });
+    const item = new MrItem(mr, false);
+    const tooltipVal = (item.tooltip as MarkdownString).value;
+    expect(tooltipVal).toContain('Copy MR link');
+    expect(tooltipVal).toContain(encodeURIComponent(JSON.stringify(['https://gitlab.example.com/org/repo/-/merge_requests/42'])));
+  });
+
+  it('shows 💬 only for a reviewer who actually commented, not all unapproved reviewers', () => {
+    const reviewers = [makeUser({ id: 10, username: 'alice' }), makeUser({ id: 11, username: 'bob' })];
+    const commentedByUserIds = new Set([11]);
+    const item = new MrItem(makeMr({ reviewers }), false, [], false, false, commentedByUserIds);
+    const tooltipVal = (item.tooltip as MarkdownString).value;
+    expect(tooltipVal).toContain('⏳ @alice');
+    expect(tooltipVal).toContain('💬 @bob');
+  });
+
+  it('shows ⏳ for all unapproved reviewers when none have commented', () => {
+    const reviewers = [makeUser({ id: 10, username: 'alice' }), makeUser({ id: 11, username: 'bob' })];
+    const item = new MrItem(makeMr({ reviewers }), false, [], false, false, new Set());
+    const tooltipVal = (item.tooltip as MarkdownString).value;
+    expect(tooltipVal).toContain('⏳ @alice');
+    expect(tooltipVal).toContain('⏳ @bob');
   });
 });
 

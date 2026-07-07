@@ -18,9 +18,18 @@ export function relativeTime(dateStr: string): string {
   return `${years} year${years === 1 ? '' : 's'} ago`;
 }
 
-export function extractTicketNumber(title: string): string | null {
-  const match = title.match(/#(\d+)/);
-  return match ? match[1] : null;
+export function extractTicketNumber(title: string, description?: string): string | null {
+  const titleMatch = title.match(/#(\d+)/);
+  if (titleMatch) return titleMatch[1];
+  if (description) {
+    // GitLab closing keywords: Closes, Fixes, Resolves, Implements (case-insensitive)
+    const descMatch = description.match(/(?:closes?|fixes?|resolves?|implements?)\s+#(\d+)/i);
+    if (descMatch) return descMatch[1];
+    // Fallback: any bare #NNN in description
+    const bareMatch = description.match(/#(\d+)/);
+    if (bareMatch) return bareMatch[1];
+  }
+  return null;
 }
 
 export function buildIssueUrl(webUrl: string, ticketNumber: string): string {
@@ -38,7 +47,8 @@ export class MrItem extends vscode.TreeItem {
     public readonly approvedByMe: boolean,
     approvedByUsers: GitLabUser[] = [],
     highlight: boolean = false,
-    public readonly viewed: boolean = false
+    public readonly viewed: boolean = false,
+    commentedByUserIds: Set<number> = new Set()
   ) {
     const approvedIds = new Set(approvedByUsers.map((u) => u.id));
     const approvedCount = mr.reviewers.filter((r) => approvedIds.has(r.id)).length;
@@ -58,16 +68,25 @@ export class MrItem extends vscode.TreeItem {
 
     this.description = `${project} • updated ${relativeTime(mr.updated_at)}`;
 
-    const pendingIcon = mr.user_notes_count > 0 ? '💬' : '⏳';
     const reviewerLines = mr.reviewers.length
-      ? mr.reviewers.map((r) => `${approvedIds.has(r.id) ? '✅' : pendingIcon} @${r.username}`).join('\n\n')
+      ? mr.reviewers
+          .map((r) => {
+            const icon = approvedIds.has(r.id) ? '✅' : commentedByUserIds.has(r.id) ? '💬' : '⏳';
+            return `${icon} @${r.username}`;
+          })
+          .join('\n\n')
       : '_No reviewers assigned_';
 
-    const ticketNumber = extractTicketNumber(mr.title);
+    const ticketNumber = extractTicketNumber(mr.title, mr.description);
     const issueUrl = ticketNumber ? buildIssueUrl(mr.web_url, ticketNumber) : null;
+    const ticketInTitle = ticketNumber ? mr.title.includes(`#${ticketNumber}`) : false;
     const titleWithTicketLink =
-      ticketNumber && issueUrl ? mr.title.replace(`#${ticketNumber}`, `[#${ticketNumber}](${issueUrl})`) : mr.title;
-    const ticketLine = issueUrl ? `${copyCommandLink('Copy ticket link', issueUrl)}\n\n` : '';
+      ticketNumber && issueUrl && ticketInTitle
+        ? mr.title.replace(`#${ticketNumber}`, `[#${ticketNumber}](${issueUrl})`)
+        : mr.title;
+    // When the ticket is in the description (not the title) show the issue link explicitly
+    const ticketRef = issueUrl && !ticketInTitle ? `[#${ticketNumber}](${issueUrl})  ` : '';
+    const ticketLine = issueUrl ? `${ticketRef}${copyCommandLink('Copy ticket link', issueUrl)}\n\n` : '';
 
     const tooltip = new vscode.MarkdownString(
       `**${titleWithTicketLink}**${draft}\n\n` +
@@ -77,7 +96,7 @@ export class MrItem extends vscode.TreeItem {
       `${copyCommandLink('Copy branch name', mr.source_branch)}\n\n` +
       `💬 ${mr.user_notes_count}  👍 ${mr.upvotes}  👎 ${mr.downvotes}\n\n` +
       `**Reviewers**\n\n${reviewerLines}\n\n` +
-      `[Open in browser](${mr.web_url})`
+      `[Open in browser](${mr.web_url})  ${copyCommandLink('Copy MR link', mr.web_url)}`
     );
     tooltip.isTrusted = true;
     tooltip.supportThemeIcons = true;

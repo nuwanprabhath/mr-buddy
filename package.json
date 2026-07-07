@@ -2,7 +2,7 @@
   "name": "mr-buddy",
   "displayName": "MR Buddy",
   "description": "GitLab merge request assistant — filter MRs you're a reviewer on, with approval-state filtering the web UI doesn't offer.",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "publisher": "nuwan",
   "license": "MIT",
   "icon": "icon.png",

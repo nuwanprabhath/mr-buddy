@@ -156,6 +156,7 @@ type MrData = {
   approvedByMe: boolean;
   approvedByUsers: GitLabUser[];
   highlight?: boolean;
+  commentedByUserIds?: Set<number>;
 };
 
 function splitByViewed(
@@ -164,20 +165,20 @@ function splitByViewed(
 ): { main: MrItem[]; viewed: MrItem[] } {
   const main: MrItem[] = [];
   const viewed: MrItem[] = [];
-  for (const { mr, approvedByMe, approvedByUsers, highlight } of dataList) {
+  for (const { mr, approvedByMe, approvedByUsers, highlight, commentedByUserIds } of dataList) {
+    const commented = commentedByUserIds ?? new Set<number>();
     const key = viewedKey(mr);
     const storedAt = viewedStore.get(key);
     if (storedAt !== undefined) {
       if (mr.updated_at === storedAt) {
-        viewed.push(new MrItem(mr, approvedByMe, approvedByUsers, highlight ?? false, true));
+        viewed.push(new MrItem(mr, approvedByMe, approvedByUsers, highlight ?? false, true, commented));
       } else {
-        // New activity since marked viewed — auto-move back to main
         viewedStore.delete(key);
         storeChanged.changed = true;
-        main.push(new MrItem(mr, approvedByMe, approvedByUsers, highlight ?? false, false));
+        main.push(new MrItem(mr, approvedByMe, approvedByUsers, highlight ?? false, false, commented));
       }
     } else {
-      main.push(new MrItem(mr, approvedByMe, approvedByUsers, highlight ?? false, false));
+      main.push(new MrItem(mr, approvedByMe, approvedByUsers, highlight ?? false, false, commented));
     }
   }
   const byUpdatedDesc = (a: MrItem, b: MrItem) =>
@@ -235,6 +236,9 @@ async function doRefresh(client: GitLabClient, currentUser: GitLabUser) {
             ]);
             const approvedByUsers = state.approved_by.map((a) => a.user);
             const approvedByMe = approvedByUsers.some((u) => u.id === currentUser!.id);
+            const commentedByUserIds = new Set(
+              discs.flatMap((d) => d.notes.filter((n) => !n.system).map((n) => n.author.id))
+            );
             const myThreads = discs.filter((d) => {
               const first = d.notes.find((n) => !n.system);
               return first?.author.id === currentUser!.id;
@@ -244,7 +248,7 @@ async function doRefresh(client: GitLabClient, currentUser: GitLabUser) {
               myThreads.every((thread) =>
                 thread.notes.filter((n) => !n.system).slice(1).some((n) => n.author.id !== currentUser!.id)
               );
-            return { mr, approvedByMe, approvedByUsers, needsMyApprovalHighlight };
+            return { mr, approvedByMe, approvedByUsers, commentedByUserIds, needsMyApprovalHighlight };
           } catch {
             return { mr, approvedByMe: false, approvedByUsers: [], needsMyApprovalHighlight: false };
           }
@@ -259,13 +263,13 @@ async function doRefresh(client: GitLabClient, currentUser: GitLabUser) {
             ]);
             const approvedByUsers = state.approved_by.map((a) => a.user);
             const approvedIds = new Set(approvedByUsers.map((u) => u.id));
-            const commenterIds = new Set(
+            const commentedByUserIds = new Set(
               discs.flatMap((d) => d.notes.filter((n) => !n.system).map((n) => n.author.id))
             );
             const highlight =
               mr.reviewers.length > 0 &&
-              mr.reviewers.every((r) => approvedIds.has(r.id) || commenterIds.has(r.id));
-            return { mr, approvedByMe: false, approvedByUsers, highlight };
+              mr.reviewers.every((r) => approvedIds.has(r.id) || commentedByUserIds.has(r.id));
+            return { mr, approvedByMe: false, approvedByUsers, commentedByUserIds, highlight };
           } catch {
             return { mr, approvedByMe: false, approvedByUsers: [] };
           }
@@ -274,10 +278,16 @@ async function doRefresh(client: GitLabClient, currentUser: GitLabUser) {
       Promise.all(
         filter(assigned).map(async (mr): Promise<MrData> => {
           try {
-            const state = await client!.approvalState(mr.project_id, mr.iid);
+            const [state, discs] = await Promise.all([
+              client!.approvalState(mr.project_id, mr.iid),
+              client!.discussions(mr.project_id, mr.iid)
+            ]);
             const approvedByUsers = state.approved_by.map((a) => a.user);
             const approvedByMe = approvedByUsers.some((u) => u.id === currentUser!.id);
-            return { mr, approvedByMe, approvedByUsers };
+            const commentedByUserIds = new Set(
+              discs.flatMap((d) => d.notes.filter((n) => !n.system).map((n) => n.author.id))
+            );
+            return { mr, approvedByMe, approvedByUsers, commentedByUserIds };
           } catch {
             return { mr, approvedByMe: false, approvedByUsers: [] };
           }
@@ -289,8 +299,8 @@ async function doRefresh(client: GitLabClient, currentUser: GitLabUser) {
 
     const needsApprovalData = reviewingData
       .filter(({ approvedByMe }) => !approvedByMe)
-      .map(({ mr, approvedByUsers, needsMyApprovalHighlight }) => ({
-        mr, approvedByMe: false, approvedByUsers, highlight: needsMyApprovalHighlight
+      .map(({ mr, approvedByUsers, commentedByUserIds, needsMyApprovalHighlight }) => ({
+        mr, approvedByMe: false, approvedByUsers, commentedByUserIds, highlight: needsMyApprovalHighlight
       }));
     const needsApprovalIds = new Set(needsApprovalData.map(({ mr }) => `${mr.project_id}:${mr.iid}`));
     const reviewingOnlyData = reviewingData.filter(({ mr }) => !needsApprovalIds.has(`${mr.project_id}:${mr.iid}`));
