@@ -68,13 +68,13 @@ export class MrItem extends vscode.TreeItem {
 
     this.description = `${project} • updated ${relativeTime(mr.updated_at)}`;
 
-    const reviewerLines = mr.reviewers.length
+    const reviewerLine = mr.reviewers.length
       ? mr.reviewers
           .map((r) => {
             const icon = approvedIds.has(r.id) ? '✅' : commentedByUserIds.has(r.id) ? '💬' : '⏳';
             return `${icon} @${r.username}`;
           })
-          .join('\n\n')
+          .join('  •  ')
       : '_No reviewers assigned_';
 
     const ticketNumber = extractTicketNumber(mr.title, mr.description);
@@ -86,17 +86,22 @@ export class MrItem extends vscode.TreeItem {
         : mr.title;
     // When the ticket is in the description (not the title) show the issue link explicitly
     const ticketRef = issueUrl && !ticketInTitle ? `[#${ticketNumber}](${issueUrl})  ` : '';
-    const ticketLine = issueUrl ? `${ticketRef}${copyCommandLink('Copy ticket link', issueUrl)}\n\n` : '';
+    const ticketCopyBtn = issueUrl ? `  ${ticketRef}${copyCommandLink('Copy ticket link', issueUrl)}` : '';
+
+    const copyButtons =
+      `${copyCommandLink('Copy branch name', mr.source_branch)}` +
+      ticketCopyBtn +
+      `  ${copyCommandLink('Copy MR link', mr.web_url)}`;
 
     const tooltip = new vscode.MarkdownString(
       `**${titleWithTicketLink}**${draft}\n\n` +
-      `${mr.references.full} by @${mr.author.username} • opened ${relativeTime(mr.created_at)} • updated ${relativeTime(mr.updated_at)}\n\n` +
-      ticketLine +
+      `${mr.references.full} by @${mr.author.username}  \n` +
+      `opened ${relativeTime(mr.created_at)} • updated ${relativeTime(mr.updated_at)}\n\n` +
       `\`${mr.source_branch}\` → \`${mr.target_branch}\`${pipeline}${conflicts}\n\n` +
-      `${copyCommandLink('Copy branch name', mr.source_branch)}\n\n` +
+      `${copyButtons}\n\n` +
       `💬 ${mr.user_notes_count}  👍 ${mr.upvotes}  👎 ${mr.downvotes}\n\n` +
-      `**Reviewers**\n\n${reviewerLines}\n\n` +
-      `[Open in browser](${mr.web_url})  ${copyCommandLink('Copy MR link', mr.web_url)}`
+      `**Reviewers:** ${reviewerLine}\n\n` +
+      `[Open in browser](${mr.web_url})`
     );
     tooltip.isTrusted = true;
     tooltip.supportThemeIcons = true;
