@@ -137,6 +137,32 @@ class EmptyItem extends vscode.TreeItem {
   }
 }
 
+/**
+ * Matches an MR against a free-text query. Every whitespace-separated term must
+ * match somewhere (AND), so "jin fix" narrows to Jin's fixes. A term prefixed
+ * with `@` is matched against the author only, e.g. "@tokmakoff".
+ */
+export function matchesFilter(mr: MergeRequest, filter: string): boolean {
+  const terms = filter.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (terms.length === 0) return true;
+
+  const author = `${mr.author.username} ${mr.author.name}`.toLowerCase();
+  const haystack = [
+    author,
+    mr.title,
+    `!${mr.iid}`,
+    mr.references.full,
+    mr.source_branch,
+    mr.target_branch
+  ]
+    .join(' ')
+    .toLowerCase();
+
+  return terms.every((term) =>
+    term.startsWith('@') ? author.includes(term.slice(1)) : haystack.includes(term)
+  );
+}
+
 export class MrTreeProvider implements vscode.TreeDataProvider<vscode.TreeItem> {
   private _onDidChange = new vscode.EventEmitter<vscode.TreeItem | undefined>();
   readonly onDidChangeTreeData = this._onDidChange.event;
@@ -144,6 +170,7 @@ export class MrTreeProvider implements vscode.TreeDataProvider<vscode.TreeItem> 
   private viewedItems: MrItem[] = [];
   private loading = false;
   private error: string | undefined;
+  private filter = '';
 
   constructor(
     public readonly bucket: BucketId,
@@ -156,6 +183,23 @@ export class MrTreeProvider implements vscode.TreeDataProvider<vscode.TreeItem> 
     this.error = undefined;
     this.loading = false;
     this._onDidChange.fire(undefined);
+  }
+
+  setFilter(filter: string) {
+    this.filter = filter;
+    this._onDidChange.fire(undefined);
+  }
+
+  private applyFilter(items: MrItem[]): MrItem[] {
+    if (!this.filter.trim()) return items;
+    return items.filter((i) => matchesFilter(i.mr, this.filter));
+  }
+
+  /** Counts used to annotate the view header, e.g. "3 of 12". */
+  get counts(): { matched: number; total: number } {
+    const total = this.items.length + this.viewedItems.length;
+    const matched = this.applyFilter(this.items).length + this.applyFilter(this.viewedItems).length;
+    return { matched, total };
   }
 
   setLoading() {
@@ -176,17 +220,24 @@ export class MrTreeProvider implements vscode.TreeDataProvider<vscode.TreeItem> 
 
   getChildren(element?: vscode.TreeItem): vscode.TreeItem[] {
     if (element instanceof ViewedFolderItem) {
-      return this.viewedItems;
+      return this.applyFilter(this.viewedItems);
     }
-    const hasContent = this.items.length > 0 || this.viewedItems.length > 0;
+    const items = this.applyFilter(this.items);
+    const viewedItems = this.applyFilter(this.viewedItems);
+    const hasFetched = this.items.length > 0 || this.viewedItems.length > 0;
+    const hasContent = items.length > 0 || viewedItems.length > 0;
     // Keep showing existing content while a background refresh is in flight —
     // only fall back to the Loading placeholder on the very first load.
-    if (this.loading && !hasContent) return [new EmptyItem('Loading…')];
-    if (this.error && !hasContent) return [new EmptyItem(`Error: ${this.error}`)];
-    if (!hasContent) return [new EmptyItem(this.emptyMessage)];
-    const root: vscode.TreeItem[] = [...this.items];
-    if (this.viewedItems.length > 0) {
-      root.push(new ViewedFolderItem(this.viewedItems.length));
+    if (this.loading && !hasFetched) return [new EmptyItem('Loading…')];
+    if (this.error && !hasFetched) return [new EmptyItem(`Error: ${this.error}`)];
+    if (!hasContent) {
+      // Distinguish "nothing here" from "nothing matched your filter"
+      const msg = hasFetched && this.filter.trim() ? `No MRs match "${this.filter}".` : this.emptyMessage;
+      return [new EmptyItem(msg)];
+    }
+    const root: vscode.TreeItem[] = [...items];
+    if (viewedItems.length > 0) {
+      root.push(new ViewedFolderItem(viewedItems.length));
     }
     return root;
   }

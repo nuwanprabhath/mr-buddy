@@ -2,6 +2,16 @@
 
 All notable changes to MR Buddy are documented here.
 
+## [0.9.0] — 2026-08-04
+
+- Add a **search/filter bar** (🔍 in any section title bar, or `Cmd+Alt+F` when the view is focused)
+- Filtering is live as you type and applies across all four sections at once
+- Matches author username/name, MR title, `!number`, project path, and source/target branch
+- Prefix a term with `@` to match the author only (e.g. `@tokmakoff`)
+- Multiple terms are ANDed together (e.g. `@jinadl fix`)
+- Section headers show `matched of total` while a filter is active
+- Clear the filter with the ✖ button that appears in the title bar
+
 ## [0.8.0] — 2026-07-15
 
 - Add CHANGELOG.md

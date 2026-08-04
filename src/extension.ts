@@ -33,16 +33,56 @@ const providers: Record<BucketId, MrTreeProvider> = {
   assigned: new MrTreeProvider('assigned', 'No MRs assigned to you.')
 };
 
+const treeViews: Partial<Record<BucketId, vscode.TreeView<vscode.TreeItem>>> = {};
+
+let filterText = '';
+
+/** Applies the filter to every section and annotates each view header with the match count. */
+function applyFilter(text: string) {
+  filterText = text;
+  vscode.commands.executeCommand('setContext', 'mrBuddy.filterActive', text.trim().length > 0);
+  for (const bucket of Object.keys(providers) as BucketId[]) {
+    providers[bucket].setFilter(text);
+  }
+  updateViewHeaders();
+}
+
+function updateViewHeaders() {
+  const active = filterText.trim().length > 0;
+  for (const bucket of Object.keys(providers) as BucketId[]) {
+    const view = treeViews[bucket];
+    if (!view) continue;
+    const { matched, total } = providers[bucket].counts;
+    view.description = active ? `${matched} of ${total} — ${filterText}` : undefined;
+  }
+}
+
+/** Live search box: the tree filters as you type, no need to press Enter. */
+function showFilterBox() {
+  const box = vscode.window.createInputBox();
+  box.title = 'Filter merge requests';
+  box.placeholder = 'author, title, !number, project or branch — prefix @ to match author only';
+  box.value = filterText;
+  box.onDidChangeValue((v) => applyFilter(v));
+  box.onDidAccept(() => box.hide());
+  box.onDidHide(() => box.dispose());
+  box.show();
+}
+
 export async function activate(context: vscode.ExtensionContext) {
   extensionContext = context;
   loadViewedStore();
 
-  vscode.window.registerTreeDataProvider('mrBuddy.reviewing', providers.reviewing);
-  vscode.window.registerTreeDataProvider('mrBuddy.needsMyApproval', providers.needsMyApproval);
-  vscode.window.registerTreeDataProvider('mrBuddy.authored', providers.authored);
-  vscode.window.registerTreeDataProvider('mrBuddy.assigned', providers.assigned);
+  for (const bucket of Object.keys(providers) as BucketId[]) {
+    treeViews[bucket] = vscode.window.createTreeView(`mrBuddy.${bucket}`, {
+      treeDataProvider: providers[bucket]
+    });
+    context.subscriptions.push(treeViews[bucket]!);
+  }
 
   context.subscriptions.push(
+    vscode.commands.registerCommand('mrBuddy.filter', () => showFilterBox()),
+    vscode.commands.registerCommand('mrBuddy.clearFilter', () => applyFilter('')),
     vscode.commands.registerCommand('mrBuddy.signIn', () => signIn(context)),
     vscode.commands.registerCommand('mrBuddy.signOut', () => signOut(context)),
     vscode.commands.registerCommand('mrBuddy.refresh', () => refreshAll()),
@@ -316,6 +356,7 @@ async function doRefresh(client: GitLabClient, currentUser: GitLabUser) {
     providers.needsMyApproval.setItems(needsApproval_.main, needsApproval_.viewed);
     providers.authored.setItems(authored_.main, authored_.viewed);
     providers.assigned.setItems(assigned_.main, assigned_.viewed);
+    updateViewHeaders();
   } catch (e: any) {
     for (const p of Object.values(providers)) p.setError(e.message);
     vscode.window.showErrorMessage(`MR Buddy: refresh failed — ${e.message}`);

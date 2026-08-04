@@ -2,7 +2,7 @@
   "name": "mr-buddy",
   "displayName": "MR Buddy",
   "description": "GitLab merge request assistant — filter MRs you're a reviewer on, with approval-state filtering the web UI doesn't offer.",
-  "version": "0.8.0",
+  "version": "0.9.0",
   "publisher": "nuwan",
   "license": "MIT",
   "icon": "icon.png",
@@ -92,6 +92,16 @@
         "title": "MR Buddy: Copy MR URL"
       },
       {
+        "command": "mrBuddy.filter",
+        "title": "MR Buddy: Filter MRs",
+        "icon": "$(search)"
+      },
+      {
+        "command": "mrBuddy.clearFilter",
+        "title": "MR Buddy: Clear Filter",
+        "icon": "$(clear-all)"
+      },
+      {
         "command": "mrBuddy.markViewed",
         "title": "MR Buddy: Mark as Viewed",
         "icon": "$(eye)"
@@ -105,9 +115,19 @@
     "menus": {
       "view/title": [
         {
+          "command": "mrBuddy.filter",
+          "when": "view == mrBuddy.reviewing || view == mrBuddy.needsMyApproval || view == mrBuddy.authored || view == mrBuddy.assigned",
+          "group": "navigation@1"
+        },
+        {
+          "command": "mrBuddy.clearFilter",
+          "when": "(view == mrBuddy.reviewing || view == mrBuddy.needsMyApproval || view == mrBuddy.authored || view == mrBuddy.assigned) && mrBuddy.filterActive",
+          "group": "navigation@2"
+        },
+        {
           "command": "mrBuddy.refresh",
           "when": "view == mrBuddy.reviewing || view == mrBuddy.needsMyApproval || view == mrBuddy.authored || view == mrBuddy.assigned",
-          "group": "navigation"
+          "group": "navigation@3"
         }
       ],
       "view/item/context": [
@@ -138,6 +158,14 @@
         }
       ]
     },
+    "keybindings": [
+      {
+        "command": "mrBuddy.filter",
+        "key": "ctrl+alt+f",
+        "mac": "cmd+alt+f",
+        "when": "focusedView =~ /^mrBuddy\\./"
+      }
+    ],
     "configuration": {
       "title": "MR Buddy",
       "properties": {

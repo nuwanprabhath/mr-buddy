@@ -8,6 +8,7 @@ VS Code extension that fills the gap in GitLab's web UI: filter merge requests y
 - **Needs My Approval** — reviewer MRs you haven't approved yet (the filter GitLab's web UI lacks)
 - **Authored by Me** — your open MRs
 - **Assigned to Me** — MRs assigned to you
+- **Search / filter** across all sections at once — by author, title, MR number, project or branch
 - Hover tooltip shows per-reviewer approval status
 - Inline **Approve** action, **Open in browser**, **Copy URL**
 - Auto-refresh on a configurable interval
@@ -26,7 +27,7 @@ git clone https://github.com/nuwanprabhath/mr-buddy.git
 cd mr-buddy
 npm install
 npx @vscode/vsce package
-code --install-extension mr-buddy-0.6.0.vsix
+code --install-extension mr-buddy-0.9.0.vsix
 ```
 
 Alternatively, install via the UI: `Cmd+Shift+P` → **Extensions: Install from VSIX…** → select the generated `.vsix`.
@@ -43,10 +44,23 @@ Alternatively, install via the UI: `Cmd+Shift+P` → **Extensions: Install from 
 ```bash
 npm install
 npx @vscode/vsce package
-code --install-extension mr-buddy-0.6.0.vsix
+code --install-extension mr-buddy-0.9.0.vsix
 ```
 
 Then reload the window: `Cmd+Shift+P` → **Developer: Reload Window**.
+
+## Searching
+
+Click the 🔍 icon in any section's title bar (or press `Cmd+Alt+F` / `Ctrl+Alt+F` while an MR Buddy view is focused). The list filters live as you type, across **all four sections** at once.
+
+| Query | Matches |
+|---|---|
+| `tokmakoff` | anything mentioning tokmakoff — author, title, branch… |
+| `@tokmakoff` | MRs **authored by** tokmakoff only |
+| `!1131` | MR number 1131 |
+| `@jinadl fix` | Jin's MRs whose title/branch mentions "fix" |
+
+Section headers show `3 of 12 — <query>` while a filter is active. Clear it with the ✖ button in the title bar.
 
 ## How "Needs My Approval" works
 
