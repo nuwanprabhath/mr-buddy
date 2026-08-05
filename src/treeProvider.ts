@@ -89,9 +89,9 @@ export class MrItem extends vscode.TreeItem {
     const ticketCopyBtn = issueUrl ? `  ${ticketRef}${copyCommandLink('Copy ticket link', issueUrl)}` : '';
 
     const copyButtons =
-      `${copyCommandLink('Copy branch name', mr.source_branch)}` +
+      `${copyCommandLink('Copy MR link', mr.web_url)}` +
       ticketCopyBtn +
-      `  ${copyCommandLink('Copy MR link', mr.web_url)}`;
+      `  ${copyCommandLink('Copy branch name', mr.source_branch)}`;
 
     const tooltip = new vscode.MarkdownString(
       `**${titleWithTicketLink}**${draft}\n\n` +

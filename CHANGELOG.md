@@ -2,6 +2,11 @@
 
 All notable changes to MR Buddy are documented here.
 
+## [0.10.0] — 2026-08-05
+
+- Reorder tooltip copy buttons: **Copy MR link** · **Copy ticket link** · **Copy branch name**
+- Add `npm run package` / `npm run install-local` scripts that delete stale `.vsix` files before building
+
 ## [0.9.0] — 2026-08-04
 
 - Add a **search/filter bar** (🔍 in any section title bar, or `Cmd+Alt+F` when the view is focused)

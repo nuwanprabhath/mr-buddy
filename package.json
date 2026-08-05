@@ -2,7 +2,7 @@
   "name": "mr-buddy",
   "displayName": "MR Buddy",
   "description": "GitLab merge request assistant — filter MRs you're a reviewer on, with approval-state filtering the web UI doesn't offer.",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "publisher": "nuwan",
   "license": "MIT",
   "icon": "icon.png",
@@ -193,7 +193,9 @@
     "build": "esbuild src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node",
     "watch": "npm run build -- --watch",
     "compile": "tsc --noEmit",
-    "test": "jest"
+    "test": "jest",
+    "package": "rm -f *.vsix && vsce package",
+    "install-local": "npm run package && code --install-extension $(ls -t *.vsix | head -1)"
   },
   "devDependencies": {
     "@types/jest": "^30.0.0",

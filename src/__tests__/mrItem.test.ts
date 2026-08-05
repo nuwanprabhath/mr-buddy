@@ -241,6 +241,22 @@ describe('MrItem tooltip', () => {
     expect(tooltipVal).toContain(encodeURIComponent(JSON.stringify(['feature/my-branch'])));
   });
 
+  it('orders copy buttons: MR link, ticket link, branch name', () => {
+    const mr = makeMr({ title: 'fix: #2783 add test and fallback' });
+    const item = new MrItem(mr, false);
+    const v = (item.tooltip as MarkdownString).value;
+    expect(v.indexOf('Copy MR link')).toBeLessThan(v.indexOf('Copy ticket link'));
+    expect(v.indexOf('Copy ticket link')).toBeLessThan(v.indexOf('Copy branch name'));
+  });
+
+  it('keeps MR link before branch name when there is no ticket number', () => {
+    const mr = makeMr({ title: 'no ticket here', description: '' });
+    const item = new MrItem(mr, false);
+    const v = (item.tooltip as MarkdownString).value;
+    expect(v).not.toContain('Copy ticket link');
+    expect(v.indexOf('Copy MR link')).toBeLessThan(v.indexOf('Copy branch name'));
+  });
+
   it('enables theme icons on the tooltip for the copy icons', () => {
     const item = new MrItem(makeMr(), false);
     expect((item.tooltip as MarkdownString).supportThemeIcons).toBe(true);

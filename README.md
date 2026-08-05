@@ -26,9 +26,10 @@ The MR Buddy icon will appear in the activity bar after install.
 git clone https://github.com/nuwanprabhath/mr-buddy.git
 cd mr-buddy
 npm install
-npx @vscode/vsce package
-code --install-extension mr-buddy-0.9.0.vsix
+npm run install-local
 ```
+
+`install-local` deletes any stale `.vsix`, builds a fresh one, and installs it.
 
 Alternatively, install via the UI: `Cmd+Shift+P` → **Extensions: Install from VSIX…** → select the generated `.vsix`.
 
@@ -43,8 +44,7 @@ Alternatively, install via the UI: `Cmd+Shift+P` → **Extensions: Install from 
 
 ```bash
 npm install
-npx @vscode/vsce package
-code --install-extension mr-buddy-0.9.0.vsix
+npm run install-local
 ```
 
 Then reload the window: `Cmd+Shift+P` → **Developer: Reload Window**.
