@@ -324,19 +324,19 @@ describe('MrItem icon and contextValue', () => {
   });
 
   it('contextValue is mr-approved-unviewed when approved and not viewed', () => {
-    expect(new MrItem(makeMr(), true, [], false, false).contextValue).toBe('mr-approved-unviewed');
+    expect(new MrItem(makeMr(), true, [], false, false).contextValue).toBe('mr-approved-unviewed-nonote');
   });
 
   it('contextValue is mr-unapproved-unviewed by default', () => {
-    expect(new MrItem(makeMr(), false).contextValue).toBe('mr-unapproved-unviewed');
+    expect(new MrItem(makeMr(), false).contextValue).toBe('mr-unapproved-unviewed-nonote');
   });
 
   it('contextValue is mr-approved-viewed when approved and viewed', () => {
-    expect(new MrItem(makeMr(), true, [], false, true).contextValue).toBe('mr-approved-viewed');
+    expect(new MrItem(makeMr(), true, [], false, true).contextValue).toBe('mr-approved-viewed-nonote');
   });
 
   it('contextValue is mr-unapproved-viewed when not approved but viewed', () => {
-    expect(new MrItem(makeMr(), false, [], false, true).contextValue).toBe('mr-unapproved-viewed');
+    expect(new MrItem(makeMr(), false, [], false, true).contextValue).toBe('mr-unapproved-viewed-nonote');
   });
 });
 

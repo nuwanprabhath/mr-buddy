@@ -36,6 +36,11 @@ export function buildIssueUrl(webUrl: string, ticketNumber: string): string {
   return webUrl.replace(/\/-\/merge_requests\/\d+\/?$/, `/-/issues/${ticketNumber}`);
 }
 
+/** Stable identity for an MR across refreshes, worktrees and windows. */
+export function mrKey(mr: Pick<MergeRequest, 'project_id' | 'iid'>): string {
+  return `${mr.project_id}:${mr.iid}`;
+}
+
 function copyCommandLink(label: string, text: string): string {
   const args = encodeURIComponent(JSON.stringify([text]));
   return `[$(copy) ${label}](command:mrBuddy.copyText?${args})`;
@@ -45,10 +50,11 @@ export class MrItem extends vscode.TreeItem {
   constructor(
     public readonly mr: MergeRequest,
     public readonly approvedByMe: boolean,
-    approvedByUsers: GitLabUser[] = [],
-    highlight: boolean = false,
+    public readonly approvedByUsers: GitLabUser[] = [],
+    public readonly highlight: boolean = false,
     public readonly viewed: boolean = false,
-    commentedByUserIds: Set<number> = new Set()
+    public readonly commentedByUserIds: Set<number> = new Set(),
+    public readonly note: string = ''
   ) {
     const approvedIds = new Set(approvedByUsers.map((u) => u.id));
     const approvedCount = mr.reviewers.filter((r) => approvedIds.has(r.id)).length;
@@ -61,12 +67,13 @@ export class MrItem extends vscode.TreeItem {
     );
     // Stable id lets VS Code diff tree updates in place instead of tearing down
     // and recreating rows on every refresh (which causes a visible flicker).
-    this.id = `${mr.project_id}:${mr.iid}`;
+    this.id = mrKey(mr);
     const pipeline = mr.head_pipeline?.status ? ` • pipeline: ${mr.head_pipeline.status}` : '';
     const conflicts = mr.has_conflicts ? ' ⚠ conflicts' : '';
     const draft = mr.draft || mr.work_in_progress ? ' [DRAFT]' : '';
 
-    this.description = `${project} • updated ${relativeTime(mr.updated_at)}`;
+    const noteMark = note.trim() ? '📝 ' : '';
+    this.description = `${noteMark}${project} • updated ${relativeTime(mr.updated_at)}`;
 
     const reviewerLine = mr.reviewers.length
       ? mr.reviewers
@@ -93,8 +100,12 @@ export class MrItem extends vscode.TreeItem {
       ticketCopyBtn +
       `  ${copyCommandLink('Copy branch name', mr.source_branch)}`;
 
+    // Your own note goes first — it is the reason you hovered in the first place.
+    const noteBlock = note.trim() ? `> 📝 ${note.trim().replace(/\n/g, '  \n> ')}\n\n` : '';
+
     const tooltip = new vscode.MarkdownString(
       `**${titleWithTicketLink}**${draft}\n\n` +
+      noteBlock +
       `${mr.references.full} by @${mr.author.username}  \n` +
       `opened ${relativeTime(mr.created_at)} • updated ${relativeTime(mr.updated_at)}\n\n` +
       `\`${mr.source_branch}\` → \`${mr.target_branch}\`${pipeline}${conflicts}\n\n` +
@@ -112,12 +123,30 @@ export class MrItem extends vscode.TreeItem {
     );
     const approvedPart = approvedByMe ? 'approved' : 'unapproved';
     const viewedPart = viewed ? 'viewed' : 'unviewed';
-    this.contextValue = `mr-${approvedPart}-${viewedPart}`;
+    const notePart = note.trim() ? 'hasnote' : 'nonote';
+    this.contextValue = `mr-${approvedPart}-${viewedPart}-${notePart}`;
     this.command = {
       command: 'mrBuddy.openMr',
       title: 'Open MR',
       arguments: [this]
     };
+  }
+
+  /** Same MR, different note — lets us update a note without refetching from GitLab. */
+  withNote(note: string): MrItem {
+    return new MrItem(
+      this.mr,
+      this.approvedByMe,
+      this.approvedByUsers,
+      this.highlight,
+      this.viewed,
+      this.commentedByUserIds,
+      note
+    );
+  }
+
+  get key(): string {
+    return mrKey(this.mr);
   }
 }
 
@@ -142,7 +171,7 @@ class EmptyItem extends vscode.TreeItem {
  * match somewhere (AND), so "jin fix" narrows to Jin's fixes. A term prefixed
  * with `@` is matched against the author only, e.g. "@tokmakoff".
  */
-export function matchesFilter(mr: MergeRequest, filter: string): boolean {
+export function matchesFilter(mr: MergeRequest, filter: string, note: string = ''): boolean {
   const terms = filter.trim().toLowerCase().split(/\s+/).filter(Boolean);
   if (terms.length === 0) return true;
 
@@ -153,7 +182,8 @@ export function matchesFilter(mr: MergeRequest, filter: string): boolean {
     `!${mr.iid}`,
     mr.references.full,
     mr.source_branch,
-    mr.target_branch
+    mr.target_branch,
+    note
   ]
     .join(' ')
     .toLowerCase();
@@ -185,6 +215,27 @@ export class MrTreeProvider implements vscode.TreeDataProvider<vscode.TreeItem> 
     this._onDidChange.fire(undefined);
   }
 
+  /**
+   * Swaps in a new note for one MR without refetching from GitLab.
+   * Returns true if this section actually held that MR.
+   */
+  setNote(key: string, note: string): boolean {
+    let changed = false;
+    const apply = (arr: MrItem[]) =>
+      arr.map((i) => {
+        if (i.key !== key) return i;
+        changed = true;
+        return i.withNote(note);
+      });
+    const items = apply(this.items);
+    const viewedItems = apply(this.viewedItems);
+    if (!changed) return false;
+    this.items = items;
+    this.viewedItems = viewedItems;
+    this._onDidChange.fire(undefined);
+    return true;
+  }
+
   setFilter(filter: string) {
     this.filter = filter;
     this._onDidChange.fire(undefined);
@@ -192,7 +243,7 @@ export class MrTreeProvider implements vscode.TreeDataProvider<vscode.TreeItem> 
 
   private applyFilter(items: MrItem[]): MrItem[] {
     if (!this.filter.trim()) return items;
-    return items.filter((i) => matchesFilter(i.mr, this.filter));
+    return items.filter((i) => matchesFilter(i.mr, this.filter, i.note));
   }
 
   /** Counts used to annotate the view header, e.g. "3 of 12". */

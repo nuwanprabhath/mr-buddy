@@ -2,6 +2,16 @@
 
 All notable changes to MR Buddy are documented here.
 
+## [0.11.0] — 2026-08-05
+
+- Add **notes**: attach a free-text note to any MR (e.g. "Not ready to review — waiting on the pipeline")
+- Notes appear at the top of the hover tooltip, above the MR metadata
+- Rows with a note are marked 📝 in the list, so you can spot them without hovering
+- Notes are stored machine-wide in `globalState`, so the same note shows in every window and worktree
+- Clear a note via right-click → **Clear Note**, or by emptying the input box
+- Notes are searchable — the filter matches note text too
+- Add / edit a note from the 📝 inline icon, the right-click menu, or `Cmd+Alt+N`
+
 ## [0.10.0] — 2026-08-05
 
 - Reorder tooltip copy buttons: **Copy MR link** · **Copy ticket link** · **Copy branch name**

@@ -2,7 +2,7 @@
   "name": "mr-buddy",
   "displayName": "MR Buddy",
   "description": "GitLab merge request assistant — filter MRs you're a reviewer on, with approval-state filtering the web UI doesn't offer.",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "publisher": "nuwan",
   "license": "MIT",
   "icon": "icon.png",
@@ -110,6 +110,16 @@
         "command": "mrBuddy.unmarkViewed",
         "title": "MR Buddy: Unmark as Viewed",
         "icon": "$(eye-closed)"
+      },
+      {
+        "command": "mrBuddy.addNote",
+        "title": "MR Buddy: Add / Edit Note",
+        "icon": "$(note)"
+      },
+      {
+        "command": "mrBuddy.clearNote",
+        "title": "MR Buddy: Clear Note",
+        "icon": "$(trash)"
       }
     ],
     "menus": {
@@ -138,12 +148,12 @@
         },
         {
           "command": "mrBuddy.markViewed",
-          "when": "viewItem =~ /^mr-.*-unviewed$/",
+          "when": "viewItem =~ /^mr-[^-]+-unviewed-/",
           "group": "inline"
         },
         {
           "command": "mrBuddy.unmarkViewed",
-          "when": "viewItem =~ /^mr-.*-viewed$/",
+          "when": "viewItem =~ /^mr-[^-]+-viewed-/",
           "group": "inline"
         },
         {
@@ -155,6 +165,21 @@
           "command": "mrBuddy.copyMrUrl",
           "when": "viewItem =~ /^mr-/",
           "group": "1_open"
+        },
+        {
+          "command": "mrBuddy.addNote",
+          "when": "viewItem =~ /^mr-/",
+          "group": "inline"
+        },
+        {
+          "command": "mrBuddy.addNote",
+          "when": "viewItem =~ /^mr-/",
+          "group": "2_note"
+        },
+        {
+          "command": "mrBuddy.clearNote",
+          "when": "viewItem =~ /-hasnote$/",
+          "group": "2_note"
         }
       ]
     },
@@ -163,6 +188,12 @@
         "command": "mrBuddy.filter",
         "key": "ctrl+alt+f",
         "mac": "cmd+alt+f",
+        "when": "focusedView =~ /^mrBuddy\\./"
+      },
+      {
+        "command": "mrBuddy.addNote",
+        "key": "ctrl+alt+n",
+        "mac": "cmd+alt+n",
         "when": "focusedView =~ /^mrBuddy\\./"
       }
     ],

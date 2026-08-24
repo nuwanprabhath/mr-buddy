@@ -1,9 +1,10 @@
 import * as vscode from 'vscode';
 import { GitLabClient, MergeRequest, GitLabUser } from './gitlab';
-import { MrTreeProvider, MrItem, ViewedFolderItem, BucketId } from './treeProvider';
+import { MrTreeProvider, MrItem, ViewedFolderItem, BucketId, mrKey } from './treeProvider';
 
 const SECRET_KEY = 'mrBuddy.gitlabToken';
 const VIEWED_STORE_KEY = 'mrBuddy.viewedStore';
+const NOTE_STORE_KEY = 'mrBuddy.noteStore';
 
 let client: GitLabClient | undefined;
 let currentUser: GitLabUser | undefined;
@@ -14,7 +15,25 @@ let extensionContext: vscode.ExtensionContext;
 let viewedStore: Map<string, string> = new Map();
 
 function viewedKey(mr: MergeRequest): string {
-  return `${mr.project_id}:${mr.iid}`;
+  return mrKey(mr);
+}
+
+// key: "projectId:iid", value: the user's free-text note.
+// Stored in globalState so it is machine-wide: the same note shows up in every
+// window/worktree, independent of which folder is open.
+let noteStore: Map<string, string> = new Map();
+
+function loadNoteStore() {
+  const saved = extensionContext.globalState.get<Record<string, string>>(NOTE_STORE_KEY) ?? {};
+  noteStore = new Map(Object.entries(saved));
+}
+
+function saveNoteStore() {
+  extensionContext.globalState.update(NOTE_STORE_KEY, Object.fromEntries(noteStore));
+}
+
+function noteFor(mr: MergeRequest): string {
+  return noteStore.get(mrKey(mr)) ?? '';
 }
 
 function loadViewedStore() {
@@ -72,6 +91,7 @@ function showFilterBox() {
 export async function activate(context: vscode.ExtensionContext) {
   extensionContext = context;
   loadViewedStore();
+  loadNoteStore();
 
   for (const bucket of Object.keys(providers) as BucketId[]) {
     treeViews[bucket] = vscode.window.createTreeView(`mrBuddy.${bucket}`, {
@@ -82,6 +102,8 @@ export async function activate(context: vscode.ExtensionContext) {
 
   context.subscriptions.push(
     vscode.commands.registerCommand('mrBuddy.filter', () => showFilterBox()),
+    vscode.commands.registerCommand('mrBuddy.addNote', (item?: MrItem) => editNote(item)),
+    vscode.commands.registerCommand('mrBuddy.clearNote', (item?: MrItem) => setNote(item, '')),
     vscode.commands.registerCommand('mrBuddy.clearFilter', () => applyFilter('')),
     vscode.commands.registerCommand('mrBuddy.signIn', () => signIn(context)),
     vscode.commands.registerCommand('mrBuddy.signOut', () => signOut(context)),
@@ -191,6 +213,44 @@ function toggleViewed(item: MrItem | undefined, markAsViewed: boolean) {
   refreshAll();
 }
 
+async function editNote(item?: MrItem) {
+  if (!item?.mr) return;
+  const existing = noteFor(item.mr);
+  const value = await vscode.window.showInputBox({
+    title: `Note for ${item.mr.references.full}`,
+    prompt: 'Visible when you hover the MR. Leave empty to clear.',
+    placeHolder: 'e.g. Not ready to review yet — waiting on the pipeline',
+    value: existing,
+    ignoreFocusOut: true
+  });
+  // undefined = user cancelled; empty string = user deliberately cleared it
+  if (value === undefined) return;
+  setNote(item, value);
+}
+
+function setNote(item: MrItem | undefined, note: string) {
+  if (!item?.mr) return;
+  const key = mrKey(item.mr);
+  const trimmed = note.trim();
+
+  // Re-read first so we merge with, rather than clobber, notes from other windows.
+  loadNoteStore();
+  if (trimmed) {
+    noteStore.set(key, trimmed);
+  } else {
+    noteStore.delete(key);
+  }
+  saveNoteStore();
+
+  // Update in place — no need to hit the GitLab API just to change a note.
+  for (const p of Object.values(providers)) p.setNote(key, trimmed);
+  updateViewHeaders();
+  vscode.window.setStatusBarMessage(
+    trimmed ? `MR Buddy: note saved for ${item.mr.references.full}` : `MR Buddy: note cleared for ${item.mr.references.full}`,
+    3000
+  );
+}
+
 type MrData = {
   mr: MergeRequest;
   approvedByMe: boolean;
@@ -207,18 +267,19 @@ function splitByViewed(
   const viewed: MrItem[] = [];
   for (const { mr, approvedByMe, approvedByUsers, highlight, commentedByUserIds } of dataList) {
     const commented = commentedByUserIds ?? new Set<number>();
+    const note = noteFor(mr);
     const key = viewedKey(mr);
     const storedAt = viewedStore.get(key);
     if (storedAt !== undefined) {
       if (mr.updated_at === storedAt) {
-        viewed.push(new MrItem(mr, approvedByMe, approvedByUsers, highlight ?? false, true, commented));
+        viewed.push(new MrItem(mr, approvedByMe, approvedByUsers, highlight ?? false, true, commented, note));
       } else {
         viewedStore.delete(key);
         storeChanged.changed = true;
-        main.push(new MrItem(mr, approvedByMe, approvedByUsers, highlight ?? false, false, commented));
+        main.push(new MrItem(mr, approvedByMe, approvedByUsers, highlight ?? false, false, commented, note));
       }
     } else {
-      main.push(new MrItem(mr, approvedByMe, approvedByUsers, highlight ?? false, false, commented));
+      main.push(new MrItem(mr, approvedByMe, approvedByUsers, highlight ?? false, false, commented, note));
     }
   }
   const byUpdatedDesc = (a: MrItem, b: MrItem) =>
@@ -250,6 +311,8 @@ async function refreshAll() {
 }
 
 async function doRefresh(client: GitLabClient, currentUser: GitLabUser) {
+  // Re-read so notes added from another window/worktree show up here too.
+  loadNoteStore();
   for (const p of Object.values(providers)) p.setLoading();
 
   const showDrafts = vscode.workspace.getConfiguration('mrBuddy').get<boolean>('showDrafts') ?? true;

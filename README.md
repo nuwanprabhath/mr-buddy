@@ -9,6 +9,7 @@ VS Code extension that fills the gap in GitLab's web UI: filter merge requests y
 - **Authored by Me** — your open MRs
 - **Assigned to Me** — MRs assigned to you
 - **Search / filter** across all sections at once — by author, title, MR number, project or branch
+- **Notes** — pin a reminder to any MR; shown on hover and synced across all your windows/worktrees
 - Hover tooltip shows per-reviewer approval status
 - Inline **Approve** action, **Open in browser**, **Copy URL**
 - Auto-refresh on a configurable interval
@@ -61,6 +62,17 @@ Click the 🔍 icon in any section's title bar (or press `Cmd+Alt+F` / `Ctrl+Alt
 | `@jinadl fix` | Jin's MRs whose title/branch mentions "fix" |
 
 Section headers show `3 of 12 — <query>` while a filter is active. Clear it with the ✖ button in the title bar.
+
+## Notes
+
+Attach a private reminder to any MR — *"not ready to review yet, pipeline still running"*.
+
+- Add or edit: 📝 inline icon on the row, right-click → **Add / Edit Note**, or `Cmd+Alt+N`
+- The note appears at the **top of the hover tooltip**, and the row is marked 📝 in the list
+- Clear it: right-click → **Clear Note**, or open the note and submit an empty value
+- Notes are searchable — the filter matches note text too
+
+Notes live in VS Code's `globalState`, which is **machine-wide**: a note added in one window or worktree shows up in all of them. Other open windows pick up the change on their next refresh (manual refresh or the auto-refresh interval).
 
 ## How "Needs My Approval" works
 
