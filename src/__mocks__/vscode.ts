@@ -11,8 +11,11 @@ export class TreeItem {
   iconPath?: any;
   contextValue?: string;
   command?: any;
-  constructor(label: any, _collapsibleState?: TreeItemCollapsibleState) {
+  id?: string;
+  collapsibleState?: TreeItemCollapsibleState;
+  constructor(label: any, collapsibleState?: TreeItemCollapsibleState) {
     this.label = label;
+    this.collapsibleState = collapsibleState;
   }
 }
 

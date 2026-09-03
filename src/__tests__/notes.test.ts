@@ -1,4 +1,4 @@
-import { MrItem, MrTreeProvider, mrKey, matchesFilter } from '../treeProvider';
+import { MrItem, MrTreeProvider, AuthorGroupItem, mrKey, matchesFilter } from '../treeProvider';
 import { MarkdownString } from '../__mocks__/vscode';
 import { makeMr, makeUser } from './helpers';
 
@@ -128,26 +128,39 @@ describe('MrItem.withNote', () => {
 });
 
 describe('MrTreeProvider.setNote', () => {
+  // Author groups are collapsed by default in these tests (default lookup), but
+  // getChildren(group) works regardless of the collapsed/expanded rendering state.
   function provider() {
     const p = new MrTreeProvider('reviewing', 'empty');
     p.setItems(
-      [new MrItem(makeMr({ project_id: 1, iid: 1 }), false)],
-      [new MrItem(makeMr({ project_id: 1, iid: 2 }), false, [], false, true)]
+      [new MrItem(makeMr({ project_id: 1, iid: 1, author: makeUser({ username: 'alice' }) }), false)],
+      [new MrItem(makeMr({ project_id: 1, iid: 2, author: makeUser({ username: 'alice' }) }), false, [], false, true)]
     );
     return p;
+  }
+
+  function firstMainItem(p: MrTreeProvider): MrItem {
+    const group = p.getChildren()[0] as AuthorGroupItem;
+    return p.getChildren(group)[0] as MrItem;
+  }
+
+  function firstViewedItem(p: MrTreeProvider): MrItem {
+    const root = p.getChildren();
+    const folder = root[root.length - 1];
+    const group = p.getChildren(folder)[0] as AuthorGroupItem;
+    return p.getChildren(group)[0] as MrItem;
   }
 
   it('applies a note to the matching item', () => {
     const p = provider();
     expect(p.setNote('1:1', NOTE)).toBe(true);
-    expect((p.getChildren()[0] as MrItem).note).toBe(NOTE);
+    expect(firstMainItem(p).note).toBe(NOTE);
   });
 
   it('applies a note to an item in the viewed sub-section', () => {
     const p = provider();
     expect(p.setNote('1:2', NOTE)).toBe(true);
-    const folder = p.getChildren()[1];
-    expect((p.getChildren(folder)[0] as MrItem).note).toBe(NOTE);
+    expect(firstViewedItem(p).note).toBe(NOTE);
   });
 
   it('returns false when this section does not hold the MR', () => {
@@ -157,15 +170,14 @@ describe('MrTreeProvider.setNote', () => {
   it('leaves other items untouched', () => {
     const p = provider();
     p.setNote('1:1', NOTE);
-    const folder = p.getChildren()[1];
-    expect((p.getChildren(folder)[0] as MrItem).note).toBe('');
+    expect(firstViewedItem(p).note).toBe('');
   });
 
   it('clears a note when given an empty string', () => {
     const p = provider();
     p.setNote('1:1', NOTE);
     p.setNote('1:1', '');
-    expect((p.getChildren()[0] as MrItem).note).toBe('');
+    expect(firstMainItem(p).note).toBe('');
   });
 });
 
@@ -181,11 +193,13 @@ describe('notes are searchable', () => {
   it('the provider filters on notes', () => {
     const p = new MrTreeProvider('reviewing', 'empty');
     p.setItems([
-      new MrItem(makeMr({ iid: 1 }), false, [], false, false, new Set(), NOTE),
-      new MrItem(makeMr({ iid: 2 }), false)
+      new MrItem(makeMr({ iid: 1, author: makeUser({ username: 'alice' }) }), false, [], false, false, new Set(), NOTE),
+      new MrItem(makeMr({ iid: 2, author: makeUser({ username: 'bob' }) }), false)
     ]);
     p.setFilter('pipeline');
-    const children = p.getChildren() as MrItem[];
+    const groups = p.getChildren() as AuthorGroupItem[];
+    expect(groups).toHaveLength(1);
+    const children = p.getChildren(groups[0]) as MrItem[];
     expect(children).toHaveLength(1);
     expect(children[0].mr.iid).toBe(1);
   });

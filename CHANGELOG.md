@@ -2,6 +2,18 @@
 
 All notable changes to MR Buddy are documented here.
 
+## [0.13.0] — 2026-08-06
+
+- **Authored by Me** no longer groups by author — it's always just you, so grouping only added an extra click for no benefit. All other sections (Reviewing, Needs My Approval, Assigned to Me) still group.
+
+## [0.12.0] — 2026-08-06
+
+- **Group MRs by author** in every section, collapsed by default
+- Each group shows the author and MR count, e.g. `@tokmakoff (12)`
+- Author groups are ordered by whichever author has the most recently updated MR — not alphabetically
+- Collapse/expand state is remembered per section, per author, and is machine-wide: closing a group stays closed in every window/worktree on this machine
+- The **Viewed** sub-section groups its own contents by author too, tracked separately from the main list
+
 ## [0.11.0] — 2026-08-05
 
 - Add **notes**: attach a free-text note to any MR (e.g. "Not ready to review — waiting on the pipeline")

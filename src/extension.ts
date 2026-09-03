@@ -1,10 +1,11 @@
 import * as vscode from 'vscode';
 import { GitLabClient, MergeRequest, GitLabUser } from './gitlab';
-import { MrTreeProvider, MrItem, ViewedFolderItem, BucketId, mrKey } from './treeProvider';
+import { MrTreeProvider, MrItem, ViewedFolderItem, AuthorGroupItem, BucketId, GroupScope, mrKey } from './treeProvider';
 
 const SECRET_KEY = 'mrBuddy.gitlabToken';
 const VIEWED_STORE_KEY = 'mrBuddy.viewedStore';
 const NOTE_STORE_KEY = 'mrBuddy.noteStore';
+const GROUP_COLLAPSE_STORE_KEY = 'mrBuddy.groupCollapseStore';
 
 let client: GitLabClient | undefined;
 let currentUser: GitLabUser | undefined;
@@ -45,11 +46,52 @@ function saveViewedStore() {
   extensionContext.globalState.update(VIEWED_STORE_KEY, Object.fromEntries(viewedStore));
 }
 
+// key: "bucket:scope:authorUsername", value: collapsed?
+// Stored in globalState (same machine-wide mechanism as notes/viewed) so collapsing
+// a group in one window/worktree keeps it collapsed everywhere.
+let groupCollapseStore: Map<string, boolean> = new Map();
+
+function loadGroupCollapseStore() {
+  const saved = extensionContext.globalState.get<Record<string, boolean>>(GROUP_COLLAPSE_STORE_KEY) ?? {};
+  groupCollapseStore = new Map(Object.entries(saved));
+}
+
+function saveGroupCollapseStore() {
+  extensionContext.globalState.update(GROUP_COLLAPSE_STORE_KEY, Object.fromEntries(groupCollapseStore));
+}
+
+function groupStoreKey(bucket: BucketId, scope: GroupScope, author: string): string {
+  return `${bucket}:${scope}:${author}`;
+}
+
+// Groups start collapsed; only a group the user has explicitly expanded (and not
+// re-collapsed since) reads as expanded here.
+function isGroupCollapsed(bucket: BucketId, scope: GroupScope, author: string): boolean {
+  return groupCollapseStore.get(groupStoreKey(bucket, scope, author)) ?? true;
+}
+
+function setGroupCollapsed(item: AuthorGroupItem, collapsed: boolean) {
+  // Re-read first so we merge with, rather than clobber, a change from another window.
+  loadGroupCollapseStore();
+  groupCollapseStore.set(groupStoreKey(item.bucket, item.scope, item.authorUsername), collapsed);
+  saveGroupCollapseStore();
+}
+
+function groupCollapsedLookup(bucket: BucketId) {
+  return (scope: GroupScope, author: string) => isGroupCollapsed(bucket, scope, author);
+}
+
 const providers: Record<BucketId, MrTreeProvider> = {
-  reviewing: new MrTreeProvider('reviewing', 'No MRs awaiting your review.'),
-  needsMyApproval: new MrTreeProvider('needsMyApproval', '🎉 All clear — nothing needs your approval.'),
-  authored: new MrTreeProvider('authored', 'No open MRs authored by you.'),
-  assigned: new MrTreeProvider('assigned', 'No MRs assigned to you.')
+  reviewing: new MrTreeProvider('reviewing', 'No MRs awaiting your review.', groupCollapsedLookup('reviewing')),
+  needsMyApproval: new MrTreeProvider(
+    'needsMyApproval',
+    '🎉 All clear — nothing needs your approval.',
+    groupCollapsedLookup('needsMyApproval')
+  ),
+  // Authored by Me is inherently single-author (you) — grouping would just add an
+  // extra click to expand your own MRs, so it's disabled for this section only.
+  authored: new MrTreeProvider('authored', 'No open MRs authored by you.', groupCollapsedLookup('authored'), false),
+  assigned: new MrTreeProvider('assigned', 'No MRs assigned to you.', groupCollapsedLookup('assigned'))
 };
 
 const treeViews: Partial<Record<BucketId, vscode.TreeView<vscode.TreeItem>>> = {};
@@ -92,12 +134,24 @@ export async function activate(context: vscode.ExtensionContext) {
   extensionContext = context;
   loadViewedStore();
   loadNoteStore();
+  loadGroupCollapseStore();
 
   for (const bucket of Object.keys(providers) as BucketId[]) {
-    treeViews[bucket] = vscode.window.createTreeView(`mrBuddy.${bucket}`, {
+    const view = vscode.window.createTreeView(`mrBuddy.${bucket}`, {
       treeDataProvider: providers[bucket]
     });
-    context.subscriptions.push(treeViews[bucket]!);
+    treeViews[bucket] = view;
+    context.subscriptions.push(
+      view,
+      // Persist the user's manual expand/collapse so it survives refreshes and
+      // shows the same way in every window/worktree on this machine.
+      view.onDidCollapseElement((e) => {
+        if (e.element instanceof AuthorGroupItem) setGroupCollapsed(e.element, true);
+      }),
+      view.onDidExpandElement((e) => {
+        if (e.element instanceof AuthorGroupItem) setGroupCollapsed(e.element, false);
+      })
+    );
   }
 
   context.subscriptions.push(
@@ -311,8 +365,9 @@ async function refreshAll() {
 }
 
 async function doRefresh(client: GitLabClient, currentUser: GitLabUser) {
-  // Re-read so notes added from another window/worktree show up here too.
+  // Re-read so notes and group collapse state from another window/worktree show up here too.
   loadNoteStore();
+  loadGroupCollapseStore();
   for (const p of Object.values(providers)) p.setLoading();
 
   const showDrafts = vscode.workspace.getConfiguration('mrBuddy').get<boolean>('showDrafts') ?? true;

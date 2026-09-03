@@ -10,6 +10,7 @@ VS Code extension that fills the gap in GitLab's web UI: filter merge requests y
 - **Assigned to Me** — MRs assigned to you
 - **Search / filter** across all sections at once — by author, title, MR number, project or branch
 - **Notes** — pin a reminder to any MR; shown on hover and synced across all your windows/worktrees
+- **Grouped by author**, collapsed by default, ordered by whoever has the most recent activity
 - Hover tooltip shows per-reviewer approval status
 - Inline **Approve** action, **Open in browser**, **Copy URL**
 - Auto-refresh on a configurable interval
@@ -62,6 +63,15 @@ Click the 🔍 icon in any section's title bar (or press `Cmd+Alt+F` / `Ctrl+Alt
 | `@jinadl fix` | Jin's MRs whose title/branch mentions "fix" |
 
 Section headers show `3 of 12 — <query>` while a filter is active. Clear it with the ✖ button in the title bar.
+
+## Author groups
+
+Every section groups its MRs by author and starts fully collapsed, so a busy "Reviewing" list doesn't bury you in rows. Expand `@someone (N)` to see their MRs.
+
+- **Ordering**: groups are sorted by whichever author has the most recently *updated* MR — not alphabetically, not by MR count
+- **Collapse state is remembered machine-wide**: collapse or expand a group and it stays that way in every window/worktree, across restarts
+- The **Viewed** sub-section groups its contents by author too, independently of the main list
+- **Authored by Me** is exempt — it's always just you, so it stays a flat list
 
 ## Notes
 

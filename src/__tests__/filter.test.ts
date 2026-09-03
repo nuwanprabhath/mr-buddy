@@ -1,4 +1,4 @@
-import { MrItem, MrTreeProvider, ViewedFolderItem, matchesFilter } from '../treeProvider';
+import { MrItem, MrTreeProvider, ViewedFolderItem, AuthorGroupItem, matchesFilter } from '../treeProvider';
 import { makeMr, makeUser } from './helpers';
 
 describe('matchesFilter', () => {
@@ -78,6 +78,14 @@ describe('matchesFilter', () => {
 });
 
 describe('MrTreeProvider filtering', () => {
+  // Root children are now author groups; flatten them back to MrItems for these
+  // filter-focused assertions (group structure itself is covered in grouping.test.ts).
+  function flatMrItems(p: MrTreeProvider, root: any[] = p.getChildren() as any[]): MrItem[] {
+    return root.flatMap((node) =>
+      node instanceof AuthorGroupItem ? p.getChildren(node) as MrItem[] : []
+    );
+  }
+
   function provider() {
     const p = new MrTreeProvider('reviewing', 'No MRs awaiting your review.');
     p.setItems([
@@ -88,16 +96,24 @@ describe('MrTreeProvider filtering', () => {
     return p;
   }
 
-  it('returns all items when no filter is set', () => {
-    expect(provider().getChildren()).toHaveLength(3);
+  it('returns all items (across groups) when no filter is set', () => {
+    expect(flatMrItems(provider())).toHaveLength(3);
   });
 
   it('returns only matching items when a filter is set', () => {
     const p = provider();
     p.setFilter('tokmakoff');
-    const children = p.getChildren() as MrItem[];
+    const children = flatMrItems(p);
     expect(children).toHaveLength(2);
     expect(children.every((c) => c.mr.author.username === 'tokmakoff')).toBe(true);
+  });
+
+  it('drops an author group entirely once its filter drops all its MRs', () => {
+    const p = provider();
+    p.setFilter('jinadl');
+    const root = p.getChildren() as AuthorGroupItem[];
+    expect(root).toHaveLength(1);
+    expect(root[0].authorUsername).toBe('jinadl');
   });
 
   it('shows a "no match" message when the filter excludes everything', () => {
@@ -132,10 +148,12 @@ describe('MrTreeProvider filtering', () => {
     );
     p.setFilter('jinadl');
     const root = p.getChildren();
-    // only the viewed folder survives — the main item is filtered out
+    // only the viewed folder survives — the main item's group is filtered out
     expect(root).toHaveLength(1);
     expect(root[0]).toBeInstanceOf(ViewedFolderItem);
-    expect(p.getChildren(root[0])).toHaveLength(1);
+    const viewedGroups = p.getChildren(root[0]) as AuthorGroupItem[];
+    expect(viewedGroups).toHaveLength(1);
+    expect(viewedGroups[0].authorUsername).toBe('jinadl');
   });
 
   it('counts include viewed items', () => {

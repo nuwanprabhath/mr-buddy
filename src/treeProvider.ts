@@ -159,6 +159,65 @@ export class ViewedFolderItem extends vscode.TreeItem {
   }
 }
 
+/** Which sub-list a group belongs to within a section, so collapse state can be tracked separately. */
+export type GroupScope = 'main' | 'viewed';
+
+export interface AuthorGroup {
+  username: string;
+  name: string;
+  items: MrItem[];
+  /** Most recent updated_at across the group's MRs — drives group ordering. */
+  latestUpdatedAt: string;
+}
+
+/**
+ * Groups already-sorted MrItems by author, ordering groups by whichever author
+ * has the most recently updated MR (not alphabetically, not by group size).
+ */
+export function groupByAuthor(items: MrItem[]): AuthorGroup[] {
+  const byAuthor = new Map<string, MrItem[]>();
+  for (const item of items) {
+    const key = item.mr.author.username;
+    const existing = byAuthor.get(key);
+    if (existing) existing.push(item);
+    else byAuthor.set(key, [item]);
+  }
+
+  const groups: AuthorGroup[] = Array.from(byAuthor.entries()).map(([username, groupItems]) => {
+    const latestUpdatedAt = groupItems.reduce(
+      (latest, i) => (new Date(i.mr.updated_at).getTime() > new Date(latest).getTime() ? i.mr.updated_at : latest),
+      groupItems[0].mr.updated_at
+    );
+    return { username, name: groupItems[0].mr.author.name, items: groupItems, latestUpdatedAt };
+  });
+
+  groups.sort((a, b) => new Date(b.latestUpdatedAt).getTime() - new Date(a.latestUpdatedAt).getTime());
+  return groups;
+}
+
+export class AuthorGroupItem extends vscode.TreeItem {
+  constructor(
+    public readonly bucket: BucketId,
+    public readonly scope: GroupScope,
+    public readonly authorUsername: string,
+    authorName: string,
+    public readonly items: MrItem[],
+    collapsed: boolean
+  ) {
+    super(
+      `@${authorUsername} (${items.length})`,
+      collapsed ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.Expanded
+    );
+    // Stable across rebuilds so VS Code keeps this row in place; the collapsed/expanded
+    // state we pass in above is what actually controls the rendered chevron, driven by
+    // a machine-wide preference the caller looks up.
+    this.id = `group:${bucket}:${scope}:${authorUsername}`;
+    if (authorName && authorName !== authorUsername) this.description = authorName;
+    this.iconPath = new vscode.ThemeIcon('person');
+    this.contextValue = 'author-group';
+  }
+}
+
 class EmptyItem extends vscode.TreeItem {
   constructor(label: string) {
     super(label, vscode.TreeItemCollapsibleState.None);
@@ -204,7 +263,11 @@ export class MrTreeProvider implements vscode.TreeDataProvider<vscode.TreeItem> 
 
   constructor(
     public readonly bucket: BucketId,
-    private readonly emptyMessage: string
+    private readonly emptyMessage: string,
+    /** Looks up the persisted (machine-wide) collapse preference for one author group. */
+    private readonly isGroupCollapsed: (scope: GroupScope, author: string) => boolean = () => true,
+    /** Sections that are inherently single-author (e.g. Authored by Me) skip grouping entirely. */
+    private readonly groupByAuthorEnabled: boolean = true
   ) {}
 
   setItems(items: MrItem[], viewedItems: MrItem[] = []) {
@@ -246,6 +309,18 @@ export class MrTreeProvider implements vscode.TreeDataProvider<vscode.TreeItem> 
     return items.filter((i) => matchesFilter(i.mr, this.filter, i.note));
   }
 
+  private buildGroups(items: MrItem[], scope: GroupScope): AuthorGroupItem[] {
+    return groupByAuthor(items).map(
+      (g) =>
+        new AuthorGroupItem(this.bucket, scope, g.username, g.name, g.items, this.isGroupCollapsed(scope, g.username))
+    );
+  }
+
+  /** Groups by author when enabled, otherwise passes the flat MrItem list straight through. */
+  private buildChildren(items: MrItem[], scope: GroupScope): vscode.TreeItem[] {
+    return this.groupByAuthorEnabled ? this.buildGroups(items, scope) : items;
+  }
+
   /** Counts used to annotate the view header, e.g. "3 of 12". */
   get counts(): { matched: number; total: number } {
     const total = this.items.length + this.viewedItems.length;
@@ -270,8 +345,11 @@ export class MrTreeProvider implements vscode.TreeDataProvider<vscode.TreeItem> 
   }
 
   getChildren(element?: vscode.TreeItem): vscode.TreeItem[] {
+    if (element instanceof AuthorGroupItem) {
+      return element.items;
+    }
     if (element instanceof ViewedFolderItem) {
-      return this.applyFilter(this.viewedItems);
+      return this.buildChildren(this.applyFilter(this.viewedItems), 'viewed');
     }
     const items = this.applyFilter(this.items);
     const viewedItems = this.applyFilter(this.viewedItems);
@@ -286,7 +364,7 @@ export class MrTreeProvider implements vscode.TreeDataProvider<vscode.TreeItem> 
       const msg = hasFetched && this.filter.trim() ? `No MRs match "${this.filter}".` : this.emptyMessage;
       return [new EmptyItem(msg)];
     }
-    const root: vscode.TreeItem[] = [...items];
+    const root: vscode.TreeItem[] = this.buildChildren(items, 'main');
     if (viewedItems.length > 0) {
       root.push(new ViewedFolderItem(viewedItems.length));
     }

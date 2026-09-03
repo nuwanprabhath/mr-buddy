@@ -1,5 +1,13 @@
-import { MrTreeProvider, MrItem, ViewedFolderItem } from '../treeProvider';
+import { MrTreeProvider, MrItem, ViewedFolderItem, AuthorGroupItem } from '../treeProvider';
 import { makeMr } from './helpers';
+
+// All these MRs share the same default author, so under grouping they land in a
+// single author group; drill through it to get back the flat MrItem for assertions
+// that predate grouping and aren't about grouping itself (that's grouping.test.ts).
+function onlyGroupItems(provider: MrTreeProvider, root = provider.getChildren()): MrItem[] {
+  const group = root.find((c) => c instanceof AuthorGroupItem) as AuthorGroupItem | undefined;
+  return group ? (provider.getChildren(group) as MrItem[]) : [];
+}
 
 function firstLabel(provider: MrTreeProvider): string {
   const children = provider.getChildren();
@@ -26,11 +34,11 @@ describe('MrTreeProvider', () => {
     expect(firstLabel(p)).toBe('No MRs here.');
   });
 
-  it('returns MrItems after setItems', () => {
+  it('returns MrItems (via their author group) after setItems', () => {
     const p = new MrTreeProvider('reviewing', 'Nothing here.');
     const items = [new MrItem(makeMr({ iid: 7 }), false)];
     p.setItems(items);
-    const children = p.getChildren();
+    const children = onlyGroupItems(p);
     expect(children).toHaveLength(1);
     expect(children[0]).toBe(items[0]);
   });
@@ -76,7 +84,7 @@ describe('MrTreeProvider background refresh keeps stale content', () => {
     const items = [new MrItem(makeMr({ iid: 1 }), false)];
     p.setItems(items);
     p.setLoading();
-    const children = p.getChildren();
+    const children = onlyGroupItems(p);
     expect(children).toHaveLength(1);
     expect(children[0]).toBe(items[0]);
   });
@@ -86,7 +94,7 @@ describe('MrTreeProvider background refresh keeps stale content', () => {
     const items = [new MrItem(makeMr({ iid: 1 }), false)];
     p.setItems(items);
     p.setError('network blip');
-    const children = p.getChildren();
+    const children = onlyGroupItems(p);
     expect(children).toHaveLength(1);
     expect(children[0]).toBe(items[0]);
   });
@@ -104,7 +112,7 @@ describe('MrTreeProvider background refresh keeps stale content', () => {
     p.setLoading();
     const fresh = [new MrItem(makeMr({ iid: 2 }), false)];
     p.setItems(fresh);
-    const children = p.getChildren();
+    const children = onlyGroupItems(p);
     expect(children).toHaveLength(1);
     expect(children[0]).toBe(fresh[0]);
   });
@@ -132,12 +140,12 @@ describe('MrTreeProvider viewed sub-section', () => {
     expect(label).toContain('2');
   });
 
-  it('getChildren(ViewedFolderItem) returns the viewed items', () => {
+  it('getChildren(ViewedFolderItem) returns the viewed items (via their author group)', () => {
     const p = new MrTreeProvider('reviewing', '');
     const viewedItem = new MrItem(makeMr({ iid: 99 }), false, [], false, true);
     p.setItems([], [viewedItem]);
     const folder = p.getChildren().find((c) => c instanceof ViewedFolderItem) as ViewedFolderItem;
-    const viewedChildren = p.getChildren(folder);
+    const viewedChildren = onlyGroupItems(p, p.getChildren(folder));
     expect(viewedChildren).toHaveLength(1);
     expect(viewedChildren[0]).toBe(viewedItem);
   });
@@ -161,8 +169,9 @@ describe('MrTreeProvider viewed sub-section', () => {
     const viewed = [new MrItem(makeMr({ iid: 2 }), false, [], false, true)];
     p.setItems(main, viewed);
     const children = p.getChildren();
-    expect(children).toHaveLength(2); // 1 main + 1 folder
-    expect(children[0]).toBe(main[0]);
+    expect(children).toHaveLength(2); // 1 author group + 1 folder
+    expect(children[0]).toBeInstanceOf(AuthorGroupItem);
+    expect(onlyGroupItems(p, children)[0]).toBe(main[0]);
     expect(children[1]).toBeInstanceOf(ViewedFolderItem);
   });
 });
