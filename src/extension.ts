@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { GitLabClient, MergeRequest, GitLabUser } from './gitlab';
+import { GitLabClient, MergeRequest, GitLabUser, Discussion } from './gitlab';
 import { MrTreeProvider, MrItem, ViewedFolderItem, AuthorGroupItem, BucketId, GroupScope, mrKey } from './treeProvider';
 
 const SECRET_KEY = 'mrBuddy.gitlabToken';
@@ -31,6 +31,17 @@ function loadNoteStore() {
 
 function saveNoteStore() {
   extensionContext.globalState.update(NOTE_STORE_KEY, Object.fromEntries(noteStore));
+}
+
+function countCommentsByUser(discs: Discussion[]): Map<number, number> {
+  const counts = new Map<number, number>();
+  for (const d of discs) {
+    for (const n of d.notes) {
+      if (n.system) continue;
+      counts.set(n.author.id, (counts.get(n.author.id) ?? 0) + 1);
+    }
+  }
+  return counts;
 }
 
 function noteFor(mr: MergeRequest): string {
@@ -310,7 +321,7 @@ type MrData = {
   approvedByMe: boolean;
   approvedByUsers: GitLabUser[];
   highlight?: boolean;
-  commentedByUserIds?: Set<number>;
+  commentedByUserIds?: Map<number, number>;
 };
 
 function splitByViewed(
@@ -320,7 +331,7 @@ function splitByViewed(
   const main: MrItem[] = [];
   const viewed: MrItem[] = [];
   for (const { mr, approvedByMe, approvedByUsers, highlight, commentedByUserIds } of dataList) {
-    const commented = commentedByUserIds ?? new Set<number>();
+    const commented = commentedByUserIds ?? new Map<number, number>();
     const note = noteFor(mr);
     const key = viewedKey(mr);
     const storedAt = viewedStore.get(key);
@@ -394,9 +405,7 @@ async function doRefresh(client: GitLabClient, currentUser: GitLabUser) {
             ]);
             const approvedByUsers = state.approved_by.map((a) => a.user);
             const approvedByMe = approvedByUsers.some((u) => u.id === currentUser!.id);
-            const commentedByUserIds = new Set(
-              discs.flatMap((d) => d.notes.filter((n) => !n.system).map((n) => n.author.id))
-            );
+            const commentedByUserIds = countCommentsByUser(discs);
             const myThreads = discs.filter((d) => {
               const first = d.notes.find((n) => !n.system);
               return first?.author.id === currentUser!.id;
@@ -421,9 +430,7 @@ async function doRefresh(client: GitLabClient, currentUser: GitLabUser) {
             ]);
             const approvedByUsers = state.approved_by.map((a) => a.user);
             const approvedIds = new Set(approvedByUsers.map((u) => u.id));
-            const commentedByUserIds = new Set(
-              discs.flatMap((d) => d.notes.filter((n) => !n.system).map((n) => n.author.id))
-            );
+            const commentedByUserIds = countCommentsByUser(discs);
             const highlight =
               mr.reviewers.length > 0 &&
               mr.reviewers.every((r) => approvedIds.has(r.id) || commentedByUserIds.has(r.id));
@@ -442,9 +449,7 @@ async function doRefresh(client: GitLabClient, currentUser: GitLabUser) {
             ]);
             const approvedByUsers = state.approved_by.map((a) => a.user);
             const approvedByMe = approvedByUsers.some((u) => u.id === currentUser!.id);
-            const commentedByUserIds = new Set(
-              discs.flatMap((d) => d.notes.filter((n) => !n.system).map((n) => n.author.id))
-            );
+            const commentedByUserIds = countCommentsByUser(discs);
             return { mr, approvedByMe, approvedByUsers, commentedByUserIds };
           } catch {
             return { mr, approvedByMe: false, approvedByUsers: [] };

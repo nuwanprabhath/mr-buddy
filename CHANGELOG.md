@@ -2,6 +2,10 @@
 
 All notable changes to MR Buddy are documented here.
 
+## [0.14.0] — 2026-10-27
+
+- The hover tooltip now shows how many comments each reviewer has left, e.g. `💬 @bob (2)`, so you can tell at a glance whether they left one comment or several. Applies to every section (Reviewing, Needs My Approval, Authored by Me, Assigned to Me)
+
 ## [0.13.0] — 2026-08-06
 
 - **Authored by Me** no longer groups by author — it's always just you, so grouping only added an extra click for no benefit. All other sections (Reviewing, Needs My Approval, Assigned to Me) still group.

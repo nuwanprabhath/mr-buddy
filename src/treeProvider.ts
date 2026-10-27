@@ -53,7 +53,8 @@ export class MrItem extends vscode.TreeItem {
     public readonly approvedByUsers: GitLabUser[] = [],
     public readonly highlight: boolean = false,
     public readonly viewed: boolean = false,
-    public readonly commentedByUserIds: Set<number> = new Set(),
+    /** Reviewer user id → number of (non-system) comments they've left on the MR. */
+    public readonly commentedByUserIds: Map<number, number> = new Map(),
     public readonly note: string = ''
   ) {
     const approvedIds = new Set(approvedByUsers.map((u) => u.id));
@@ -78,8 +79,10 @@ export class MrItem extends vscode.TreeItem {
     const reviewerLine = mr.reviewers.length
       ? mr.reviewers
           .map((r) => {
-            const icon = approvedIds.has(r.id) ? '✅' : commentedByUserIds.has(r.id) ? '💬' : '⏳';
-            return `${icon} @${r.username}`;
+            if (approvedIds.has(r.id)) return `✅ @${r.username}`;
+            const commentCount = commentedByUserIds.get(r.id) ?? 0;
+            if (commentCount > 0) return `💬 @${r.username} (${commentCount})`;
+            return `⏳ @${r.username}`;
           })
           .join('  •  ')
       : '_No reviewers assigned_';

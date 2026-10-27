@@ -25,24 +25,24 @@ describe('MrItem note', () => {
   });
 
   it('shows the note in the tooltip', () => {
-    const item = new MrItem(makeMr(), false, [], false, false, new Set(), NOTE);
+    const item = new MrItem(makeMr(), false, [], false, false, new Map(), NOTE);
     expect(tip(item)).toContain(NOTE);
   });
 
   it('puts the note above the MR metadata so it is seen first', () => {
     const mr = makeMr({ references: { full: 'org/repo!42' } });
-    const item = new MrItem(mr, false, [], false, false, new Set(), NOTE);
+    const item = new MrItem(mr, false, [], false, false, new Map(), NOTE);
     const v = tip(item);
     expect(v.indexOf(NOTE)).toBeLessThan(v.indexOf('org/repo!42'));
   });
 
   it('renders the note as a blockquote with a 📝 marker', () => {
-    const item = new MrItem(makeMr(), false, [], false, false, new Set(), NOTE);
+    const item = new MrItem(makeMr(), false, [], false, false, new Map(), NOTE);
     expect(tip(item)).toContain(`> 📝 ${NOTE}`);
   });
 
   it('keeps multi-line notes inside the blockquote', () => {
-    const item = new MrItem(makeMr(), false, [], false, false, new Set(), 'line one\nline two');
+    const item = new MrItem(makeMr(), false, [], false, false, new Map(), 'line one\nline two');
     expect(tip(item)).toContain('> 📝 line one  \n> line two');
   });
 
@@ -51,13 +51,13 @@ describe('MrItem note', () => {
   });
 
   it('treats a whitespace-only note as no note', () => {
-    const item = new MrItem(makeMr(), false, [], false, false, new Set(), '   ');
+    const item = new MrItem(makeMr(), false, [], false, false, new Map(), '   ');
     expect(tip(item)).not.toContain('📝');
     expect(item.contextValue).toContain('nonote');
   });
 
   it('marks the row description with 📝 so notes are visible without hovering', () => {
-    const item = new MrItem(makeMr(), false, [], false, false, new Set(), NOTE);
+    const item = new MrItem(makeMr(), false, [], false, false, new Map(), NOTE);
     expect(item.description).toMatch(/^📝 /);
   });
 
@@ -68,7 +68,7 @@ describe('MrItem note', () => {
 
 describe('MrItem note contextValue', () => {
   it('ends with -hasnote when a note is set', () => {
-    const item = new MrItem(makeMr(), false, [], false, false, new Set(), NOTE);
+    const item = new MrItem(makeMr(), false, [], false, false, new Map(), NOTE);
     expect(item.contextValue).toBe('mr-unapproved-unviewed-hasnote');
   });
 
@@ -78,7 +78,7 @@ describe('MrItem note contextValue', () => {
 
   it('the clear-note menu regex matches only noted items', () => {
     const clearNote = /-hasnote$/;
-    const noted = new MrItem(makeMr(), false, [], false, false, new Set(), NOTE);
+    const noted = new MrItem(makeMr(), false, [], false, false, new Map(), NOTE);
     const plain = new MrItem(makeMr(), false);
     expect(clearNote.test(noted.contextValue!)).toBe(true);
     expect(clearNote.test(plain.contextValue!)).toBe(false);
@@ -87,8 +87,8 @@ describe('MrItem note contextValue', () => {
   it('the viewed-toggle menu regexes still work with the note segment appended', () => {
     const markViewed = /^mr-[^-]+-unviewed-/;
     const unmarkViewed = /^mr-[^-]+-viewed-/;
-    const unviewed = new MrItem(makeMr(), true, [], false, false, new Set(), NOTE);
-    const viewed = new MrItem(makeMr(), true, [], false, true, new Set(), NOTE);
+    const unviewed = new MrItem(makeMr(), true, [], false, false, new Map(), NOTE);
+    const viewed = new MrItem(makeMr(), true, [], false, true, new Map(), NOTE);
 
     expect(markViewed.test(unviewed.contextValue!)).toBe(true);
     expect(unmarkViewed.test(unviewed.contextValue!)).toBe(false);
@@ -104,7 +104,7 @@ describe('MrItem.withNote', () => {
   });
 
   it('clears the note when given an empty string', () => {
-    const noted = new MrItem(makeMr(), false, [], false, false, new Set(), NOTE);
+    const noted = new MrItem(makeMr(), false, [], false, false, new Map(), NOTE);
     expect(noted.withNote('').note).toBe('');
     expect(noted.withNote('').contextValue).toContain('nonote');
   });
@@ -112,7 +112,7 @@ describe('MrItem.withNote', () => {
   it('preserves every other field', () => {
     const reviewers = [makeUser({ id: 10 })];
     const approvedBy = [makeUser({ id: 10 })];
-    const original = new MrItem(makeMr({ reviewers }), true, approvedBy, true, true, new Set([10]));
+    const original = new MrItem(makeMr({ reviewers }), true, approvedBy, true, true, new Map([[10, 1]]));
     const updated = original.withNote(NOTE);
 
     expect(updated.mr).toBe(original.mr);
@@ -193,7 +193,7 @@ describe('notes are searchable', () => {
   it('the provider filters on notes', () => {
     const p = new MrTreeProvider('reviewing', 'empty');
     p.setItems([
-      new MrItem(makeMr({ iid: 1, author: makeUser({ username: 'alice' }) }), false, [], false, false, new Set(), NOTE),
+      new MrItem(makeMr({ iid: 1, author: makeUser({ username: 'alice' }) }), false, [], false, false, new Map(), NOTE),
       new MrItem(makeMr({ iid: 2, author: makeUser({ username: 'bob' }) }), false)
     ]);
     p.setFilter('pipeline');
