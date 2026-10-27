@@ -289,13 +289,19 @@ describe('MrItem tooltip', () => {
     expect(tooltipVal).toContain(encodeURIComponent(JSON.stringify(['https://gitlab.example.com/org/repo/-/merge_requests/42'])));
   });
 
-  it('shows 💬 with the comment count only for a reviewer who actually commented, not all unapproved reviewers', () => {
+  it('shows 💬 with unresolved/total comment count only for a reviewer who actually commented, not all unapproved reviewers', () => {
     const reviewers = [makeUser({ id: 10, username: 'alice' }), makeUser({ id: 11, username: 'bob' })];
-    const commentedByUserIds = new Map([[11, 2]]);
+    const commentedByUserIds = new Map([[11, { total: 6, unresolved: 1 }]]);
     const item = new MrItem(makeMr({ reviewers }), false, [], false, false, commentedByUserIds);
     const tooltipVal = (item.tooltip as MarkdownString).value;
     expect(tooltipVal).toContain('⏳ @alice');
-    expect(tooltipVal).toContain('💬 @bob (2)');
+    expect(tooltipVal).toContain('💬 @bob (1/6)');
+  });
+
+  it('shows 0/N when every comment from the reviewer is resolved', () => {
+    const reviewers = [makeUser({ id: 11, username: 'bob' })];
+    const item = new MrItem(makeMr({ reviewers }), false, [], false, false, new Map([[11, { total: 6, unresolved: 0 }]]));
+    expect((item.tooltip as MarkdownString).value).toContain('💬 @bob (0/6)');
   });
 
   it('shows ⏳ for all unapproved reviewers when none have commented', () => {

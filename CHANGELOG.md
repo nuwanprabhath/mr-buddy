@@ -2,6 +2,10 @@
 
 All notable changes to MR Buddy are documented here.
 
+## [0.15.0] — 2026-10-27
+
+- The reviewer comment badge in the hover tooltip now shows **unresolved / total**, e.g. `💬 @bob (1/6)` means 6 comments, 1 still unresolved. `(0/6)` means everything they raised has been resolved
+
 ## [0.14.0] — 2026-10-27
 
 - The hover tooltip now shows how many comments each reviewer has left, e.g. `💬 @bob (2)`, so you can tell at a glance whether they left one comment or several. Applies to every section (Reviewing, Needs My Approval, Authored by Me, Assigned to Me)

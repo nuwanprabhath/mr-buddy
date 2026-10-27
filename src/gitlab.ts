@@ -48,6 +48,8 @@ export interface Note {
   author: GitLabUser;
   body: string;
   system: boolean;
+  resolvable?: boolean;
+  resolved?: boolean;
 }
 
 export interface Discussion {

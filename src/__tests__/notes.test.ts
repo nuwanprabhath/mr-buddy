@@ -112,7 +112,7 @@ describe('MrItem.withNote', () => {
   it('preserves every other field', () => {
     const reviewers = [makeUser({ id: 10 })];
     const approvedBy = [makeUser({ id: 10 })];
-    const original = new MrItem(makeMr({ reviewers }), true, approvedBy, true, true, new Map([[10, 1]]));
+    const original = new MrItem(makeMr({ reviewers }), true, approvedBy, true, true, new Map([[10, { total: 1, unresolved: 0 }]]));
     const updated = original.withNote(NOTE);
 
     expect(updated.mr).toBe(original.mr);

@@ -46,6 +46,12 @@ function copyCommandLink(label: string, text: string): string {
   return `[$(copy) ${label}](command:mrBuddy.copyText?${args})`;
 }
 
+/** A reviewer's comments on an MR: everything they wrote, and how many of those are still unresolved. */
+export interface CommentStats {
+  total: number;
+  unresolved: number;
+}
+
 export class MrItem extends vscode.TreeItem {
   constructor(
     public readonly mr: MergeRequest,
@@ -53,8 +59,8 @@ export class MrItem extends vscode.TreeItem {
     public readonly approvedByUsers: GitLabUser[] = [],
     public readonly highlight: boolean = false,
     public readonly viewed: boolean = false,
-    /** Reviewer user id → number of (non-system) comments they've left on the MR. */
-    public readonly commentedByUserIds: Map<number, number> = new Map(),
+    /** Reviewer user id → their (non-system) comments on the MR. */
+    public readonly commentedByUserIds: Map<number, CommentStats> = new Map(),
     public readonly note: string = ''
   ) {
     const approvedIds = new Set(approvedByUsers.map((u) => u.id));
@@ -80,8 +86,8 @@ export class MrItem extends vscode.TreeItem {
       ? mr.reviewers
           .map((r) => {
             if (approvedIds.has(r.id)) return `✅ @${r.username}`;
-            const commentCount = commentedByUserIds.get(r.id) ?? 0;
-            if (commentCount > 0) return `💬 @${r.username} (${commentCount})`;
+            const stats = commentedByUserIds.get(r.id);
+            if (stats && stats.total > 0) return `💬 @${r.username} (${stats.unresolved}/${stats.total})`;
             return `⏳ @${r.username}`;
           })
           .join('  •  ')

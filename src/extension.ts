@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { GitLabClient, MergeRequest, GitLabUser, Discussion } from './gitlab';
-import { MrTreeProvider, MrItem, ViewedFolderItem, AuthorGroupItem, BucketId, GroupScope, mrKey } from './treeProvider';
+import { MrTreeProvider, MrItem, ViewedFolderItem, AuthorGroupItem, CommentStats, BucketId, GroupScope, mrKey } from './treeProvider';
 
 const SECRET_KEY = 'mrBuddy.gitlabToken';
 const VIEWED_STORE_KEY = 'mrBuddy.viewedStore';
@@ -33,12 +33,15 @@ function saveNoteStore() {
   extensionContext.globalState.update(NOTE_STORE_KEY, Object.fromEntries(noteStore));
 }
 
-function countCommentsByUser(discs: Discussion[]): Map<number, number> {
-  const counts = new Map<number, number>();
+function countCommentsByUser(discs: Discussion[]): Map<number, CommentStats> {
+  const counts = new Map<number, CommentStats>();
   for (const d of discs) {
     for (const n of d.notes) {
       if (n.system) continue;
-      counts.set(n.author.id, (counts.get(n.author.id) ?? 0) + 1);
+      const stats = counts.get(n.author.id) ?? { total: 0, unresolved: 0 };
+      stats.total++;
+      if (n.resolvable && !n.resolved) stats.unresolved++;
+      counts.set(n.author.id, stats);
     }
   }
   return counts;
@@ -321,7 +324,7 @@ type MrData = {
   approvedByMe: boolean;
   approvedByUsers: GitLabUser[];
   highlight?: boolean;
-  commentedByUserIds?: Map<number, number>;
+  commentedByUserIds?: Map<number, CommentStats>;
 };
 
 function splitByViewed(
@@ -331,7 +334,7 @@ function splitByViewed(
   const main: MrItem[] = [];
   const viewed: MrItem[] = [];
   for (const { mr, approvedByMe, approvedByUsers, highlight, commentedByUserIds } of dataList) {
-    const commented = commentedByUserIds ?? new Map<number, number>();
+    const commented = commentedByUserIds ?? new Map<number, CommentStats>();
     const note = noteFor(mr);
     const key = viewedKey(mr);
     const storedAt = viewedStore.get(key);
